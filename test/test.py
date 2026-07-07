@@ -56,8 +56,27 @@ def insert_purchase(items, purchased_at=None):
         """,
             (cutoff,),
         )
+    rebuild_sales_history(conn)
     conn.close()
     return ts
+
+
+def rebuild_sales_history(conn):
+    rows = conn.execute(
+        "SELECT purchased_at, name, units FROM PURCHASES ORDER BY purchased_at ASC"
+    ).fetchall()
+    cumulative = {}
+    hourly = {}
+    for row in rows:
+        ts, name, units = row[0], row[1], row[2]
+        slot = ts - (ts % 3600)
+        cumulative[name] = cumulative.get(name, 0) + units
+        hourly[(slot, name)] = cumulative[name]
+    conn.execute("DELETE FROM SALES_HISTORY;")
+    conn.executemany(
+        "INSERT OR REPLACE INTO SALES_HISTORY(snapshot_time, name, amount) VALUES (?, ?, ?);",
+        [(slot, name, amount) for (slot, name), amount in sorted(hourly.items())],
+    )
 
 
 def clear_test_purchases(since_ts):
@@ -76,6 +95,7 @@ def clear_test_purchases(since_ts):
         """,
             (cutoff,),
         )
+    rebuild_sales_history(conn)
     conn.close()
 
 
@@ -253,6 +273,39 @@ def test_response_rate():
     offer_cleanup(start_ts)
 
 
+def test_add_specific():
+    separator("TEST: Add specific item and quantity")
+    products = get_products()
+    if not products:
+        print("No products in DB. Run sync.py first.")
+        return
+
+    print("Available products:")
+    for i, name in enumerate(products):
+        print(f"  {i + 1}. {name}")
+
+    try:
+        idx = int(input("\nSelect product number: ").strip()) - 1
+        if idx < 0 or idx >= len(products):
+            print("Invalid selection.")
+            return
+        qty = int(input("Units to add: ").strip())
+        if qty <= 0:
+            print("Must be > 0.")
+            return
+    except ValueError:
+        print("Invalid input.")
+        return
+
+    name = products[idx]
+    start_ts = int(time.time())
+    insert_purchase([(name, qty)], purchased_at=start_ts)
+    print(f"Inserted: {name} x{qty}")
+    print("Watch the chart and leaderboard update.")
+    input("Press Enter when done observing...")
+    offer_cleanup(start_ts)
+
+
 TESTS = {
     "1": ("Single item purchase", test_single_item),
     "2": ("Multi-item basket grouping", test_multi_item),
@@ -262,6 +315,7 @@ TESTS = {
     "6": ("Max items in one purchase", test_max_items),
     "7": ("Leaderboard reorder", test_leaderboard_reorder),
     "8": ("DB write latency benchmark", test_response_rate),
+    "9": ("Add specific item and quantity", test_add_specific),
 }
 
 
