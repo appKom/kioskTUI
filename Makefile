@@ -100,6 +100,15 @@ clean:
 cleanall: clean
 	rm -f $(CREATE_BIN) $(INSERT_BIN)
 
+# Note: only works with a synced db
+.PHONY: test
+test:
+	python3 test/test.py
+
+.PHONY: sync
+sync:
+	python3 src/scripts/sync.py
+
 # ── Include auto-generated dependency files ────────────────────────────
 -include $(DEPS)
 
