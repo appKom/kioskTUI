@@ -25,11 +25,9 @@ BIN     := leaderboard
 DB_SRCDIR := src/backend
 CREATE_SRC := $(DB_SRCDIR)/create.cpp
 INSERT_SRC := $(DB_SRCDIR)/insertDelete.cpp
-SEED_SRC   := $(DB_SRCDIR)/seed.cpp
 
 CREATE_BIN := $(DB_SRCDIR)/create
 INSERT_BIN := $(DB_SRCDIR)/insertDelete
-SEED_BIN   := $(DB_SRCDIR)/seed
 
 # ── Default: release build ─────────────────────────────────────────────
 .PHONY: all
@@ -61,28 +59,19 @@ $(CREATE_BIN): $(CREATE_SRC)
 $(INSERT_BIN): $(INSERT_SRC)
 	$(CXX) -O2 $< -o $@ $(DB_LIBS)
 
-$(SEED_BIN): $(SEED_SRC)
-	$(CXX) -O2 $< -o $@ $(DB_LIBS)
-
 # make db  — create tables and insert all 20 products
 .PHONY: db
 db: $(CREATE_BIN)
 	$(CREATE_BIN)
 	@echo "Database ready."
 
-# make seed  — populate SALES_HISTORY with one week of hourly data
-.PHONY: seed
-seed: $(SEED_BIN)
-	$(SEED_BIN)
-
-# make resetdb  — wipe and rebuild the database from scratch, then seed
+# make resetdb  — wipe and rebuild the database from scratch
 .PHONY: resetdb
 resetdb:
 	@echo "Removing old database..."
 	rm -f $(DB_SRCDIR)/example.db
 	$(MAKE) db
-	$(MAKE) seed
-	@echo "Database reset and seeded."
+	@echo "Database reset"
 
 # ── Run ────────────────────────────────────────────────────────────────
 .PHONY: run
@@ -109,7 +98,7 @@ clean:
 # Clean including compiled db tools (but not the database itself)
 .PHONY: cleanall
 cleanall: clean
-	rm -f $(CREATE_BIN) $(INSERT_BIN) $(SEED_BIN)
+	rm -f $(CREATE_BIN) $(INSERT_BIN)
 
 # ── Include auto-generated dependency files ────────────────────────────
 -include $(DEPS)

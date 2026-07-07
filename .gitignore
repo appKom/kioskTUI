@@ -1,8 +1,6 @@
 leaderboard
 src/backend/example.db
 src/backend/create
-src/backend/insertDelete
-src/backend/seed
 .env
 tokens.json
 sync_state.json
