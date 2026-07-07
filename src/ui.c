@@ -251,8 +251,9 @@ static void draw_latest_window(WINDOW *win) {
   for (int i = 0; i < show; ++i) {
     int idx = start_idx + i;
     char buf[PRODUCT_NAME_MAX + 20];
-    int len = snprintf(buf, sizeof buf, "%s \xe2\x80\x94 %d units",
-                       items[idx].name, items[idx].units);
+    int len =
+        snprintf(buf, sizeof buf, "%s \xe2\x80\x94 %d %s", items[idx].name,
+                 items[idx].units, items[idx].units == 1 ? "unit" : "units");
     int x = (win_w - len) / 2;
     if (x < 1)
       x = 1;
