@@ -16,7 +16,7 @@ The software has not been tested on windows, as the windows terminal emulator in
 MacOS should work (UNIX based, iTERM's graphical protocol etc).
 It has also been tested on server configurations with no DE or compositor, and as of writing everything renders properly except the leaderboard banners.
 
-## use
+## Use
 
 To use the TUI:
 
@@ -31,6 +31,8 @@ When db init is successful, you can sync it (this requires zettle API keys place
 ```bash
 make sync
 ```
+
+The script keeps running until interruption, so it is recommended to use tmux or another type of terminal multiplexer to the sync script in a different pane, and use another for the tui itself.
 
 Finally the binaries can be built and the application launched in the terminal
 
