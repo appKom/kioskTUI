@@ -7,3 +7,4 @@ src/backend/seed
 tokens.json
 sync_state.json
 leaderboard.log
+obj/*
