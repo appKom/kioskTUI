@@ -26,7 +26,7 @@ The database must be initialized before synchronization can work
 make db
 ```
 
-When db init is successful, you can sync it (this requires zettle API keys placed in the .env)
+When db init is successful, you can sync it (this requires Zettle API keys placed in the .env)
 
 ```bash
 make sync
@@ -39,3 +39,13 @@ Finally the binaries can be built and the application launched in the terminal
 ```bash
 make && ./leaderboard
 ```
+
+## Testing
+
+Run the testing framework using:
+
+```bash
+make test
+```
+
+The tests written emulate Zettle transactions and are meant to test response time of the tui as well as edge cases (such as how it responds to max items in a transaction). All the injected test data can be removed after observation with a prompt after test finish.
