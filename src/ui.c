@@ -233,15 +233,27 @@ static void draw_latest_window(WINDOW *win) {
   if (has_colors())
     wattroff(win, A_DIM);
 
-  int max_item_rows = win_h - 3;
-  if (max_item_rows < 1)
+  int max_rows = win_h - 3;
+  if (max_rows < 1)
     return;
-  int show = n < max_item_rows ? n : max_item_rows;
+
+  int page_rows = (n > max_rows) ? max_rows - 1 : max_rows;
+  if (page_rows < 1)
+    page_rows = 1;
+
+  int n_pages = (n + page_rows - 1) / page_rows;
+  int page = (n_pages > 1) ? (int)(time(NULL) / 3) % n_pages : 0;
+  int start_idx = page * page_rows;
+  int show = n - start_idx;
+  if (show > page_rows)
+    show = page_rows;
 
   for (int i = 0; i < show; ++i) {
+    int idx = start_idx + i;
     char buf[PRODUCT_NAME_MAX + 20];
-    int len = snprintf(buf, sizeof buf, "%s \xe2\x80\x94 %d units",
-                       items[i].name, items[i].units);
+    int len =
+        snprintf(buf, sizeof buf, "%s \xe2\x80\x94 %d %s", items[idx].name,
+                 items[idx].units, items[idx].units == 1 ? "unit" : "units");
     int x = (win_w - len) / 2;
     if (x < 1)
       x = 1;
@@ -254,15 +266,16 @@ static void draw_latest_window(WINDOW *win) {
       wattroff(win, COLOR_PAIR(CP_TOP2) | A_BOLD);
   }
 
-  if (n > show && max_item_rows >= 1) {
-    char more[24];
-    int mlen = snprintf(more, sizeof more, "+ %d more", n - show);
-    int mx = (win_w - mlen) / 2;
-    if (mx < 1)
-      mx = 1;
+  if (n_pages > 1) {
+    char indicator[24];
+    int ilen =
+        snprintf(indicator, sizeof indicator, "%d / %d", page + 1, n_pages);
+    int ix = (win_w - ilen) / 2;
+    if (ix < 1)
+      ix = 1;
     if (has_colors())
       wattron(win, A_DIM);
-    mvwprintw(win, 2 + show - 1, mx, "%s", more);
+    mvwprintw(win, 2 + page_rows, ix, "%s", indicator);
     if (has_colors())
       wattroff(win, A_DIM);
   }

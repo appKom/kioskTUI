@@ -14,9 +14,23 @@ import time
 import urllib.request
 import urllib.parse
 
-CURRENT_DIR = os.getcwd()
-CREDENTIALS_FILE = os.path.join(CURRENT_DIR, ".env")
-TOKENS_FILE = os.path.join(CURRENT_DIR, "tokens.json")
+
+def find_project_root(start, marker="Makefile"):
+    path = os.path.realpath(start)
+    while True:
+        if os.path.exists(os.path.join(path, marker)):
+            return path
+        parent = os.path.dirname(path)
+        if parent == path:
+            raise RuntimeError(f"Could not find project root (looking for {marker})")
+        path = parent
+
+
+CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
+PROJECT_ROOT = find_project_root(CURRENT_DIR)
+
+CREDENTIALS_FILE = os.path.join(PROJECT_ROOT, ".env")
+TOKENS_FILE = os.path.join(PROJECT_ROOT, "tokens.json")
 TOKEN_ENDPOINT = "https://oauth.zettle.com/token"
 EXPIRY_MARGIN = 300  # seconds before expiry to pre-emptively refresh
 

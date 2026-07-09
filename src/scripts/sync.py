@@ -14,9 +14,22 @@ import urllib.parse
 import urllib.error
 from datetime import datetime, timezone, timedelta
 
+
+def find_project_root(start, marker="Makefile"):
+    path = os.path.realpath(start)
+    while True:
+        if os.path.exists(os.path.join(path, marker)):
+            return path
+        parent = os.path.dirname(path)
+        if parent == path:
+            raise RuntimeError(f"Could not find project root (looking for {marker})")
+        path = parent
+
+
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
-DB_PATH = os.path.join(CURRENT_DIR, "src/backend/example.db")
-STATE_FILE = os.path.join(CURRENT_DIR, "sync_state.json")
+PROJECT_ROOT = find_project_root(CURRENT_DIR)
+DB_PATH = os.path.join(PROJECT_ROOT, "src/backend/example.db")
+STATE_FILE = os.path.join(PROJECT_ROOT, "sync_state.json")
 
 PURCHASE_API = "https://purchase.izettle.com/purchases/v2"
 PRODUCTS_API = "https://products.izettle.com/organizations/self/products/v2"
@@ -29,7 +42,7 @@ WINDOW_DAYS = 365
 # manage tokens
 def load_credentials():
     creds = {}
-    with open(os.path.join(CURRENT_DIR, ".env")) as f:
+    with open(os.path.join(PROJECT_ROOT, ".env")) as f:
         for line in f:
             line = line.strip()
             if not line or line.startswith("#"):
@@ -41,14 +54,14 @@ def load_credentials():
 
 def load_tokens():
     try:
-        with open(os.path.join(CURRENT_DIR, "tokens.json")) as f:
+        with open(os.path.join(PROJECT_ROOT, "tokens.json")) as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return {}
 
 
 def save_tokens(tokens):
-    with open(os.path.join(CURRENT_DIR, "tokens.json"), "w") as f:
+    with open(os.path.join(PROJECT_ROOT, "tokens.json"), "w") as f:
         json.dump(tokens, f, indent=2)
 
 
@@ -253,7 +266,7 @@ def main():
     whitelist = {}
     last_product_fetch = 0
 
-    print("Sync started. Polling every 30s...")
+    print("Sync started. Polling every 1s...")
 
     while True:
         try:
