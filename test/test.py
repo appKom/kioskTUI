@@ -5,6 +5,7 @@ import sqlite3
 import sys
 import time
 import random
+from datetime import datetime, timezone
 
 
 def find_project_root(start, marker="Makefile"):
@@ -56,7 +57,7 @@ def insert_purchase(items, purchased_at=None):
         """,
             (cutoff,),
         )
-    rebuild_sales_history(conn)
+        rebuild_sales_history(conn)
     conn.close()
     return ts
 
@@ -95,7 +96,7 @@ def clear_test_purchases(since_ts):
         """,
             (cutoff,),
         )
-    rebuild_sales_history(conn)
+        rebuild_sales_history(conn)
     conn.close()
 
 
@@ -274,7 +275,7 @@ def test_response_rate():
 
 
 def test_add_specific():
-    separator("TEST: Add specific item and quantity")
+    separator("TEST: Add specific item, quantity and date")
     products = get_products()
     if not products:
         print("No products in DB. Run sync.py first.")
@@ -293,15 +294,23 @@ def test_add_specific():
         if qty <= 0:
             print("Must be > 0.")
             return
-    except ValueError:
-        print("Invalid input.")
+        date_str = input("Date (YYYY-MM-DD, leave blank for today): ").strip()
+        if date_str:
+            dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            ts = int(dt.timestamp())
+        else:
+            ts = int(time.time())
+    except ValueError as e:
+        print(f"Invalid input: {e}")
         return
 
     name = products[idx]
-    start_ts = int(time.time())
-    insert_purchase([(name, qty)], purchased_at=start_ts)
-    print(f"Inserted: {name} x{qty}")
-    print("Watch the chart and leaderboard update.")
+    start_ts = ts
+    insert_purchase([(name, qty)], purchased_at=ts)
+    print(
+        f"Inserted: {name} x{qty} at {datetime.fromtimestamp(ts, tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+    )
+    print("Watch the chart update.")
     input("Press Enter when done observing...")
     offer_cleanup(start_ts)
 
