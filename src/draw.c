@@ -12,7 +12,7 @@
 #include <time.h>
 
 #define PRINT_BUF_SIZE 512
-#define MAX_NAME_COLS 32
+#define MAX_NAME_COLS 24
 
 static char **loaded_banner = NULL;
 static char **loaded_fame = NULL;
@@ -98,8 +98,19 @@ void printw_centered_stdscr_safe(int y, int cols, const char *fmt, ...) {
   mvprintw(y, x, "%s", buf);
 }
 
+static void fmt_revenue(char *buf, size_t bufsz, int qty, int price_ore) {
+  int nok = (qty * price_ore) / 100;
+  if (nok >= 1000000)
+    snprintf(buf, bufsz, "%d %03d %03d kr", nok / 1000000, (nok / 1000) % 1000,
+             nok % 1000);
+  else if (nok >= 1000)
+    snprintf(buf, bufsz, "%d %03d kr", nok / 1000, nok % 1000);
+  else
+    snprintf(buf, bufsz, "%d kr", nok);
+}
+
 static void fmt_row(char *buf, size_t bufsz, int rank, const char *name,
-                    int qty, int name_w) {
+                    int qty, int price_ore, int name_w) {
   char name_col[MAX_NAME_COLS + 4];
   int nw = utf8_display_width(name);
   if (nw <= name_w) {
@@ -108,7 +119,14 @@ static void fmt_row(char *buf, size_t bufsz, int rank, const char *name,
     utf8_truncate_to_width(name, name_col, sizeof name_col, name_w - 1);
     strncat(name_col, "\xe2\x80\xa6", sizeof name_col - strlen(name_col) - 1);
   }
-  snprintf(buf, bufsz, "%2d. %s %6d", rank, name_col, qty);
+
+  if (price_ore > 0) {
+    char rev[24];
+    fmt_revenue(rev, sizeof rev, qty, price_ore);
+    snprintf(buf, bufsz, "%2d. %s %6d    %12s", rank, name_col, qty, rev);
+  } else {
+    snprintf(buf, bufsz, "%2d. %s %6d", rank, name_col, qty);
+  }
 }
 
 static const int top_row_color_pairs[] = {CP_TOP1, CP_TOP2, CP_ALERT};
@@ -146,7 +164,8 @@ void draw_rows_in_win_centered_safe(WINDOW *win, int start_y, int capacity,
     if (!item)
       break;
     char row[PRINT_BUF_SIZE];
-    fmt_row(row, sizeof row, i + 1, item->product, item->qty, name_w);
+    fmt_row(row, sizeof row, i + 1, item->product, item->qty, item->price,
+            name_w);
     bool highlight = (i < TOP_ROW_COLORED) && has_colors();
     if (highlight)
       wattron(win, COLOR_PAIR(top_row_color_pairs[i]) | A_BOLD);
@@ -167,7 +186,8 @@ void draw_rows_on_stdscr_centered_safe(int start_y, int rows, int cols) {
     if (!item)
       break;
     char row[PRINT_BUF_SIZE];
-    fmt_row(row, sizeof row, i + 1, item->product, item->qty, name_w);
+    fmt_row(row, sizeof row, i + 1, item->product, item->qty, item->price,
+            name_w);
     int len = utf8_display_width(row);
     int x = (cols - len) / 2;
     if (x < 0)
@@ -175,8 +195,6 @@ void draw_rows_on_stdscr_centered_safe(int start_y, int rows, int cols) {
     mvprintw(start_y + i, x, "%s", row);
   }
 }
-
-/* ── chart ────────────────────────────────────────────────────────────── */
 
 static const int line_colors[5] = {CP_LINE_1, CP_LINE_2, CP_LINE_3, CP_LINE_4,
                                    CP_LINE_5};
@@ -303,7 +321,6 @@ void draw_chart_window(WINDOW *win, int slide, int n_slides) {
     return;
   }
 
-  /* Full calendar range. */
   long ts_first = 0, ts_last = 0;
   data_daily_time(0, &ts_first);
   data_daily_time(days - 1, &ts_last);
@@ -311,7 +328,6 @@ void draw_chart_window(WINDOW *win, int slide, int n_slides) {
   ts_last = ts_last - (ts_last % 86400);
   long range_days = (ts_last - ts_first) / 86400 + 1;
 
-  /* Find max cumulative value across all shown items for y-scale. */
   int max_val = 1;
   for (int slot = 0; slot < n_items; ++slot) {
     const Item *item = data_get(item_start + slot);
@@ -327,7 +343,6 @@ void draw_chart_window(WINDOW *win, int slide, int n_slides) {
       max_val = cum;
   }
 
-  /* Y-axis labels. */
   for (int row = plot_top; row <= plot_bot; ++row) {
     if (row == plot_top || row == plot_bot ||
         row == (plot_top + plot_bot) / 2) {
@@ -338,7 +353,6 @@ void draw_chart_window(WINDOW *win, int slide, int n_slides) {
     }
   }
 
-  /* X-axis month labels with minimum gap enforcement. */
   static const char *month_names[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
                                       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
   int xlabel_row = plot_bot + 1;
@@ -362,7 +376,6 @@ void draw_chart_window(WINDOW *win, int slide, int n_slides) {
     }
   }
 
-  /* Draw cumulative lines with calendar-mapped x positions. */
   for (int slot = 0; slot < n_items; ++slot) {
     const Item *item = data_get(item_start + slot);
     if (!item)
@@ -375,8 +388,6 @@ void draw_chart_window(WINDOW *win, int slide, int n_slides) {
       int v = data_daily_get(d, item->product);
       if (v > 0)
         cumulative += v;
-
-      /* Always plot once we have at least one sale. */
       if (cumulative == 0)
         continue;
 
@@ -396,7 +407,6 @@ void draw_chart_window(WINDOW *win, int slide, int n_slides) {
         draw_line_segment(win, prev_col, prev_row, cur_col, cur_row,
                           color_pair);
       } else {
-        /* Same column: redraw with updated row. */
         if (has_colors())
           wattron(win, COLOR_PAIR(color_pair) | A_BOLD);
         mvwaddch(win, cur_row, cur_col, '*');
@@ -408,7 +418,6 @@ void draw_chart_window(WINDOW *win, int slide, int n_slides) {
     }
   }
 
-  /* Legend. */
   int legend_y = plot_bot + 2;
   for (int slot = 0; slot < n_items; ++slot) {
     const Item *item = data_get(item_start + slot);
@@ -419,13 +428,11 @@ void draw_chart_window(WINDOW *win, int slide, int n_slides) {
       break;
     if (has_colors())
       wattron(win, COLOR_PAIR(line_colors[slot % 5]) | A_BOLD);
-    mvwprintw(win, y, 2, "-- %s (total: %d)", item->product, item->qty);
+    mvwprintw(win, y, 2, "-- %s  %d units", item->product, item->qty);
     if (has_colors())
       wattroff(win, COLOR_PAIR(line_colors[slot % 5]) | A_BOLD);
   }
 }
-
-/* ── banners ──────────────────────────────────────────────────────────── */
 
 void draw_load_banners(void) {
   loaded_banner = load_banner_by_name("default");

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Zettle sync script.
-Polls the Zettle Purchase API every 30 seconds and writes new purchases
+Polls the Zettle Purchase API every N seconds and writes new purchases
 to the local SQLite database. Maintains PRODUCT, PURCHASES, and SALES_HISTORY.
 """
 
@@ -31,6 +31,8 @@ PROJECT_ROOT = find_project_root(CURRENT_DIR)
 DB_PATH = os.path.join(PROJECT_ROOT, "src/backend/example.db")
 STATE_FILE = os.path.join(PROJECT_ROOT, "sync_state.json")
 
+STATE_FILE = os.path.join(CURRENT_DIR, "sync_state.json")
+
 PURCHASE_API = "https://purchase.izettle.com/purchases/v2"
 PRODUCTS_API = "https://products.izettle.com/organizations/self/products/v2"
 
@@ -39,7 +41,6 @@ PRODUCT_REFRESH_SECS = 3600
 WINDOW_DAYS = 365
 
 
-# manage tokens
 def load_credentials():
     creds = {}
     with open(os.path.join(PROJECT_ROOT, ".env")) as f:
@@ -94,6 +95,9 @@ def get_access_token():
     return result["access_token"]
 
 
+# ── HTTP ───────────────────────────────────────────────────────────────
+
+
 def api_get(url, token, params=None):
     if params:
         url = url + "?" + urllib.parse.urlencode(params)
@@ -102,10 +106,28 @@ def api_get(url, token, params=None):
         return json.loads(resp.read())
 
 
-# get the actual valid kiosk products
+# ── product whitelist ──────────────────────────────────────────────────
+
+
 def fetch_product_whitelist(token):
     data = api_get(PRODUCTS_API, token)
-    return {p["uuid"]: p["name"] for p in data if "uuid" in p and "name" in p}
+    result = {}
+    for p in data:
+        if "uuid" not in p or "name" not in p:
+            continue
+        price = 0
+        variants = p.get("variants", [])
+        if variants:
+            price_val = variants[0].get("price", 0) or 0
+            if isinstance(price_val, dict):
+                price = price_val.get("amount", 0) or 0
+            else:
+                price = int(price_val) if price_val else 0
+        result[p["uuid"]] = (p["name"], price)
+    return result
+
+
+# ── state ──────────────────────────────────────────────────────────────
 
 
 def load_state():
@@ -121,18 +143,25 @@ def save_state(state):
         json.dump(state, f, indent=2)
 
 
+# ── database ───────────────────────────────────────────────────────────
+
+
 def open_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 
-def ensure_product(conn, name):
+def ensure_product(conn, name, price):
     conn.execute(
-        "INSERT OR IGNORE INTO PRODUCT(NAME, AMOUNT, ID) "
-        "VALUES (?, 0, (SELECT COALESCE(MAX(ID),0)+1 FROM PRODUCT));",
-        (name,),
+        "INSERT OR IGNORE INTO PRODUCT(NAME, AMOUNT, PRICE, ID) "
+        "VALUES (?, 0, ?, (SELECT COALESCE(MAX(ID),0)+1 FROM PRODUCT));",
+        (name, price),
     )
+    if price > 0:
+        conn.execute(
+            "UPDATE PRODUCT SET PRICE = ? WHERE NAME = ? AND PRICE = 0;", (price, name)
+        )
 
 
 def insert_purchase_rows(conn, purchased_at, items):
@@ -192,6 +221,15 @@ def update_current_hour_history(conn):
     )
 
 
+def prune_old_data(conn):
+    cutoff = int(time.time()) - WINDOW_DAYS * 86400
+    conn.execute("DELETE FROM PURCHASES WHERE purchased_at < ?;", (cutoff,))
+    conn.execute("DELETE FROM SALES_HISTORY WHERE snapshot_time < ?;", (cutoff,))
+
+
+# ── purchase fetching ──────────────────────────────────────────────────
+
+
 def iso_to_unix(iso):
     iso = iso.replace("Z", "+00:00")
     if len(iso) > 6 and iso[-5] in ("+", "-") and ":" not in iso[-5:]:
@@ -227,14 +265,14 @@ def fetch_new_purchases(token, since_iso, whitelist):
                 uuid = product.get("productUuid", "")
                 if uuid not in whitelist:
                     continue
-                name = whitelist[uuid]
+                name, price = whitelist[uuid]
                 try:
                     qty = int(float(product.get("quantity", "0")))
                 except ValueError:
                     qty = 0
                 if qty <= 0:
                     continue
-                items.append((name, qty))
+                items.append((name, qty, price))
             if items:
                 baskets.append((unix_ts, items))
                 newest_ts = created
@@ -246,10 +284,7 @@ def fetch_new_purchases(token, since_iso, whitelist):
     return baskets, newest_ts
 
 
-def prune_old_data(conn):
-    cutoff = int(time.time()) - WINDOW_DAYS * 86400
-    conn.execute("DELETE FROM PURCHASES WHERE purchased_at < ?;", (cutoff,))
-    conn.execute("DELETE FROM SALES_HISTORY WHERE snapshot_time < ?;", (cutoff,))
+# ── main ───────────────────────────────────────────────────────────────
 
 
 def main():
@@ -266,7 +301,7 @@ def main():
     whitelist = {}
     last_product_fetch = 0
 
-    print("Sync started. Polling every 1s...")
+    print(f"Sync started. Polling every {POLL_INTERVAL}s...")
 
     while True:
         try:
@@ -285,9 +320,11 @@ def main():
                 try:
                     with conn:
                         for purchased_at, items in baskets:
-                            for name, _ in items:
-                                ensure_product(conn, name)
-                            insert_purchase_rows(conn, purchased_at, items)
+                            for name, _, price in items:
+                                ensure_product(conn, name, price)
+                            insert_purchase_rows(
+                                conn, purchased_at, [(n, q) for n, q, _ in items]
+                            )
                         recalculate_amounts(conn)
                         if is_first:
                             rebuild_sales_history(conn)
