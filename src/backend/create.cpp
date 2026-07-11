@@ -19,7 +19,8 @@ int main(int argc, char **argv) {
   const char *sql_product = "CREATE TABLE IF NOT EXISTS PRODUCT("
                             "  ID     INT  PRIMARY KEY NOT NULL,"
                             "  NAME   TEXT             NOT NULL,"
-                            "  AMOUNT INT              NOT NULL"
+                            "  AMOUNT INT              NOT NULL,"
+                            "  PRICE  INT              NOT NULL DEFAULT 0"
                             ");";
 
   exit = sqlite3_exec(DB, sql_product, NULL, 0, &errMsg);
@@ -30,6 +31,11 @@ int main(int argc, char **argv) {
     return 1;
   }
   std::cout << "PRODUCT table ready." << std::endl;
+
+  /* Add PRICE column to existing DBs — safe to ignore if already exists. */
+  sqlite3_exec(DB,
+               "ALTER TABLE PRODUCT ADD COLUMN PRICE INT NOT NULL DEFAULT 0;",
+               NULL, 0, NULL);
 
   const char *sql_history = "CREATE TABLE IF NOT EXISTS SALES_HISTORY("
                             "  snapshot_time INTEGER NOT NULL,"
@@ -54,6 +60,16 @@ int main(int argc, char **argv) {
       "  name         TEXT    NOT NULL,"
       "  units        INTEGER NOT NULL"
       ");";
+
+  exit = sqlite3_exec(DB, sql_purchases, NULL, 0, &errMsg);
+  if (exit != SQLITE_OK) {
+    std::cerr << "Error creating PURCHASES table: " << errMsg << std::endl;
+    sqlite3_free(errMsg);
+    sqlite3_close(DB);
+    return 1;
+  }
+  std::cout << "PURCHASES table ready." << std::endl;
+
   const char *sql_idx =
       "CREATE UNIQUE INDEX IF NOT EXISTS idx_product_name ON PRODUCT(NAME);";
 
@@ -65,14 +81,6 @@ int main(int argc, char **argv) {
     return 1;
   }
   std::cout << "Product name index ready." << std::endl;
-  exit = sqlite3_exec(DB, sql_purchases, NULL, 0, &errMsg);
-  if (exit != SQLITE_OK) {
-    std::cerr << "Error creating PURCHASES table: " << errMsg << std::endl;
-    sqlite3_free(errMsg);
-    sqlite3_close(DB);
-    return 1;
-  }
-  std::cout << "PURCHASES table ready." << std::endl;
 
   sqlite3_close(DB);
   return 0;

@@ -46,6 +46,7 @@ static int row_cb(void *unused, int cols, char **vals, char **names) {
   strncpy(items[items_count].product, vals[0] ? vals[0] : "",
           sizeof items[0].product - 1);
   items[items_count].qty = vals[1] ? atoi(vals[1]) : 0;
+  items[items_count].price = vals[2] ? atoi(vals[2]) : 0;
   ++items_count;
   return 0;
 }
@@ -59,8 +60,8 @@ static void load_from_db(void) {
   if (!db)
     return;
   char *err = NULL;
-  int rc =
-      sqlite3_exec(db, "SELECT NAME, AMOUNT FROM PRODUCT;", row_cb, NULL, &err);
+  int rc = sqlite3_exec(db, "SELECT NAME, AMOUNT, PRICE FROM PRODUCT;", row_cb,
+                        NULL, &err);
   if (rc != SQLITE_OK) {
     fprintf(stderr, "data: query failed: %s\n", err);
     sqlite3_free(err);

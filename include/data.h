@@ -6,6 +6,7 @@
 typedef struct {
   char product[PRODUCT_NAME_MAX];
   int qty;
+  int price; /* unit price in øre (1/100 NOK) */
 } Item;
 
 typedef struct {
