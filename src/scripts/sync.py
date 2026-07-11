@@ -31,8 +31,6 @@ PROJECT_ROOT = find_project_root(CURRENT_DIR)
 DB_PATH = os.path.join(PROJECT_ROOT, "src/backend/example.db")
 STATE_FILE = os.path.join(PROJECT_ROOT, "sync_state.json")
 
-STATE_FILE = os.path.join(CURRENT_DIR, "sync_state.json")
-
 PURCHASE_API = "https://purchase.izettle.com/purchases/v2"
 PRODUCTS_API = "https://products.izettle.com/organizations/self/products/v2"
 
@@ -95,7 +93,7 @@ def get_access_token():
     return result["access_token"]
 
 
-# ── HTTP ───────────────────────────────────────────────────────────────
+# http
 
 
 def api_get(url, token, params=None):
@@ -106,7 +104,7 @@ def api_get(url, token, params=None):
         return json.loads(resp.read())
 
 
-# ── product whitelist ──────────────────────────────────────────────────
+# product whitelist
 
 
 def fetch_product_whitelist(token):
@@ -127,7 +125,7 @@ def fetch_product_whitelist(token):
     return result
 
 
-# ── state ──────────────────────────────────────────────────────────────
+# state
 
 
 def load_state():
@@ -143,7 +141,7 @@ def save_state(state):
         json.dump(state, f, indent=2)
 
 
-# ── database ───────────────────────────────────────────────────────────
+# db
 
 
 def open_db():
@@ -227,7 +225,7 @@ def prune_old_data(conn):
     conn.execute("DELETE FROM SALES_HISTORY WHERE snapshot_time < ?;", (cutoff,))
 
 
-# ── purchase fetching ──────────────────────────────────────────────────
+# purchase fetching
 
 
 def iso_to_unix(iso):
@@ -284,7 +282,7 @@ def fetch_new_purchases(token, since_iso, whitelist):
     return baskets, newest_ts
 
 
-# ── main ───────────────────────────────────────────────────────────────
+# main
 
 
 def main():
