@@ -30,62 +30,72 @@ static int max_i(int a, int b) { return a > b ? a : b; }
 #define MIN_CHART_H 10
 #define MIN_LATEST_H 8
 #define LATEST_ITEM_MAX 16
+#define LEADERBOARD_ITEMS 5
+
+typedef enum { LAYOUT_STACKED, LAYOUT_SIDE_BY_SIDE } LayoutMode;
 
 typedef struct {
+  LayoutMode mode;
   int banner_lines, fame_lines, lame_lines;
   int top_y, bot_y, chart_y, latest_y;
-  int win_h, chart_h, latest_h, win_w;
+  int win_h, chart_h, latest_h, win_w, half_w;
 } Layout;
 
-static int compute_layout(int rows, int cols, Layout *out) {
-  if (cols < MIN_COLS || rows < MIN_ROWS)
+static int ideal_panel_h(int banner_lines) {
+  int h = 1 + banner_lines + 1 + LEADERBOARD_ITEMS + 1;
+  return h < MIN_WIN_H ? MIN_WIN_H : h;
+}
+
+static int try_side_by_side(int rows, int cols, Layout *out) {
+  if (cols <= rows)
     return 0;
+
   int win_w = cols - SIDE_MARGIN * 2;
-  if (win_w < MIN_WIN_W)
+  int half_w = win_w / 2;
+  if (half_w < MIN_WIN_W)
     return 0;
 
   int banner_lines = out->banner_lines;
   int fame_lines = out->fame_lines;
   int lame_lines = out->lame_lines;
+
   int *trim[3] = {&banner_lines, &fame_lines, &lame_lines};
   int max_iters = banner_lines + fame_lines + lame_lines;
 
   for (int iter = 0; iter <= max_iters; ++iter) {
     int avail = rows - (banner_lines + 1 + FOOTER_LINES);
-    int min_win_h = max_i(MIN_WIN_H, max_i(fame_lines, lame_lines) + 7);
-    if (avail >= min_win_h * 2 + MIN_CHART_H + MIN_LATEST_H) {
-      int latest_h = MIN_LATEST_H;
-      int rest = avail - latest_h;
-      int win_h = max_i(rest / 3, min_win_h);
-      int chart_h = rest - win_h * 2;
-      if (chart_h < MIN_CHART_H) {
-        chart_h = MIN_CHART_H;
-        win_h = max_i((rest - chart_h) / 2, min_win_h);
-      }
+
+    int win_h = max_i(ideal_panel_h(fame_lines), ideal_panel_h(lame_lines));
+    int latest_h = MIN_LATEST_H;
+    int chart_h = avail - win_h - latest_h;
+
+    if (chart_h >= MIN_CHART_H) {
       int y = banner_lines + 1;
       int top_y = y;
-      y += win_h;
-      int bot_y = y;
       y += win_h;
       int chart_y = y;
       y += chart_h;
       int latest_y = y;
       y += latest_h + FOOTER_LINES;
+
       if (y <= rows) {
+        out->mode = LAYOUT_SIDE_BY_SIDE;
         out->banner_lines = banner_lines;
         out->fame_lines = fame_lines;
         out->lame_lines = lame_lines;
         out->top_y = top_y;
-        out->bot_y = bot_y;
+        out->bot_y = top_y;
         out->chart_y = chart_y;
         out->latest_y = latest_y;
         out->win_h = win_h;
         out->chart_h = chart_h;
         out->latest_h = latest_h;
         out->win_w = win_w;
+        out->half_w = half_w;
         return 1;
       }
     }
+
     bool trimmed = 0;
     for (int k = 0; k < 3 && !trimmed; ++k) {
       int idx = (iter + k) % 3;
@@ -98,6 +108,77 @@ static int compute_layout(int rows, int cols, Layout *out) {
       break;
   }
   return 0;
+}
+
+static int try_stacked(int rows, int cols, Layout *out) {
+  int win_w = cols - SIDE_MARGIN * 2;
+  if (win_w < MIN_WIN_W)
+    return 0;
+
+  int banner_lines = out->banner_lines;
+  int fame_lines = out->fame_lines;
+  int lame_lines = out->lame_lines;
+
+  int *trim[3] = {&banner_lines, &fame_lines, &lame_lines};
+  int max_iters = banner_lines + fame_lines + lame_lines;
+
+  for (int iter = 0; iter <= max_iters; ++iter) {
+    int avail = rows - (banner_lines + 1 + FOOTER_LINES);
+
+    int top_h = ideal_panel_h(fame_lines);
+    int bot_h = ideal_panel_h(lame_lines);
+    int latest_h = MIN_LATEST_H;
+    int chart_h = avail - top_h - bot_h - latest_h;
+
+    if (chart_h >= MIN_CHART_H) {
+      int y = banner_lines + 1;
+      int top_y = y;
+      y += top_h;
+      int bot_y = y;
+      y += bot_h;
+      int chart_y = y;
+      y += chart_h;
+      int latest_y = y;
+      y += latest_h + FOOTER_LINES;
+
+      if (y <= rows) {
+        out->mode = LAYOUT_STACKED;
+        out->banner_lines = banner_lines;
+        out->fame_lines = fame_lines;
+        out->lame_lines = lame_lines;
+        out->top_y = top_y;
+        out->bot_y = bot_y;
+        out->chart_y = chart_y;
+        out->latest_y = latest_y;
+        out->win_h = top_h;
+        out->chart_h = chart_h;
+        out->latest_h = latest_h;
+        out->win_w = win_w;
+        out->half_w = win_w;
+        return 1;
+      }
+    }
+
+    bool trimmed = 0;
+    for (int k = 0; k < 3 && !trimmed; ++k) {
+      int idx = (iter + k) % 3;
+      if (*trim[idx] > 1) {
+        --(*trim[idx]);
+        trimmed = 1;
+      }
+    }
+    if (!trimmed)
+      break;
+  }
+  return 0;
+}
+
+static int compute_layout(int rows, int cols, Layout *out) {
+  if (cols < MIN_COLS || rows < MIN_ROWS)
+    return 0;
+  if (try_side_by_side(rows, cols, out))
+    return 1;
+  return try_stacked(rows, cols, out);
 }
 
 static WINDOW *resize_or_create_win(WINDOW *w, int h, int ww, int y, int x) {
@@ -131,10 +212,19 @@ static void delete_windows(WINDOW **top, WINDOW **bot, WINDOW **chart,
 
 static int apply_layout(WINDOW **top, WINDOW **bot, WINDOW **chart,
                         WINDOW **latest, const Layout *lo) {
-  *top =
-      resize_or_create_win(*top, lo->win_h, lo->win_w, lo->top_y, SIDE_MARGIN);
-  *bot =
-      resize_or_create_win(*bot, lo->win_h, lo->win_w, lo->bot_y, SIDE_MARGIN);
+  if (lo->mode == LAYOUT_SIDE_BY_SIDE) {
+    int left_w = lo->half_w;
+    int right_w = lo->win_w - lo->half_w;
+    *top =
+        resize_or_create_win(*top, lo->win_h, left_w, lo->top_y, SIDE_MARGIN);
+    *bot = resize_or_create_win(*bot, lo->win_h, right_w, lo->top_y,
+                                SIDE_MARGIN + left_w);
+  } else {
+    int top_h = ideal_panel_h(lo->fame_lines);
+    int bot_h = ideal_panel_h(lo->lame_lines);
+    *top = resize_or_create_win(*top, top_h, lo->win_w, lo->top_y, SIDE_MARGIN);
+    *bot = resize_or_create_win(*bot, bot_h, lo->win_w, lo->bot_y, SIDE_MARGIN);
+  }
   *chart = resize_or_create_win(*chart, lo->chart_h, lo->win_w, lo->chart_y,
                                 SIDE_MARGIN);
   *latest = resize_or_create_win(*latest, lo->latest_h, lo->win_w, lo->latest_y,
@@ -236,11 +326,9 @@ static void draw_latest_window(WINDOW *win) {
   int max_rows = win_h - 3;
   if (max_rows < 1)
     return;
-
   int page_rows = (n > max_rows) ? max_rows - 1 : max_rows;
   if (page_rows < 1)
     page_rows = 1;
-
   int n_pages = (n + page_rows - 1) / page_rows;
   int page = (n_pages > 1) ? (int)(time(NULL) / 3) % n_pages : 0;
   int start_idx = page * page_rows;
@@ -334,6 +422,9 @@ void ui_run(void) {
     if (resized) {
       resized = 0;
       getmaxyx(stdscr, rows, cols);
+      lo.banner_lines = draw_banner_lines();
+      lo.fame_lines = draw_fame_lines();
+      lo.lame_lines = draw_lame_lines();
       if (compute_layout(rows, cols, &lo))
         have_win = apply_layout(&top, &bot, &chart, &latest, &lo);
       else {
