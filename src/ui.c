@@ -47,7 +47,7 @@ static int ideal_panel_h(int banner_lines) {
 }
 
 static int try_side_by_side(int rows, int cols, Layout *out) {
-  if (cols <= rows)
+  if (cols <= rows * 2)
     return 0;
 
   int win_w = cols - SIDE_MARGIN * 2;
