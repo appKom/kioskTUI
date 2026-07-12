@@ -14,7 +14,7 @@ To use the TUI, you should have installed and assured that the following are wor
 
 The software has not been tested on windows, as the windows terminal emulator infrastructure has really bad graphical protocols/compatibility.
 MacOS should work (UNIX based, iTERM's graphical protocol etc).
-It has also been tested on server configurations with no DE or compositor, and as of writing everything renders properly except the leaderboard banners.
+It has also been tested on server configurations with no DE or compositor, and everything runs properly, though the graphical borders get converted to true ascii characters instead.
 
 ## Use
 
