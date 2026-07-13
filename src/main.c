@@ -24,14 +24,20 @@ static void init_colors(void) {
   init_pair(CP_ALERT, COLOR_RED, -1);
   init_pair(CP_ACCENT, COLOR_MAGENTA, -1);
   init_pair(CP_LAME, COLOR_RED, -1);
-  init_pair_from_hex(CP_BANNER, BANNER_COLOR_SLOT, BANNER_HEX);
-  init_pair_from_hex(CP_LINE_1, 9, LINE1_HEX);
-  init_pair_from_hex(CP_LINE_2, 10, LINE2_HEX);
-  init_pair_from_hex(CP_LINE_3, 11, LINE3_HEX);
-  init_pair_from_hex(CP_LINE_4, 12, LINE4_HEX);
-  init_pair_from_hex(CP_LINE_5, 13, LINE5_HEX);
+  if (COLORS <= 8 ||
+      init_pair_from_hex(CP_BANNER, BANNER_COLOR_SLOT, BANNER_HEX) < 0)
+    init_pair(CP_BANNER, COLOR_YELLOW, COLOR_BLACK);
+  if (init_pair_from_hex(CP_LINE_1, 9, LINE1_HEX) < 0)
+    init_pair(CP_LINE_1, COLOR_RED, -1);
+  if (init_pair_from_hex(CP_LINE_2, 10, LINE2_HEX) < 0)
+    init_pair(CP_LINE_2, COLOR_GREEN, -1);
+  if (init_pair_from_hex(CP_LINE_3, 11, LINE3_HEX) < 0)
+    init_pair(CP_LINE_3, COLOR_CYAN, -1);
+  if (init_pair_from_hex(CP_LINE_4, 12, LINE4_HEX) < 0)
+    init_pair(CP_LINE_4, COLOR_YELLOW, -1);
+  if (init_pair_from_hex(CP_LINE_5, 13, LINE5_HEX) < 0)
+    init_pair(CP_LINE_5, COLOR_MAGENTA, -1);
 }
-
 int main(void) {
   freopen("leaderboard.log", "a", stderr);
 
