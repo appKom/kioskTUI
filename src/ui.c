@@ -447,7 +447,7 @@ static void draw_confetti_animation(int rows, int cols) {
       if (y < 0 || y >= rows)
         continue;
 
-      int len = (int)strlen(lines[i]);
+      int len = utf8_display_width(lines[i]);
       int x = (cols - len) / 2;
       if (x < 0)
         x = 0;
