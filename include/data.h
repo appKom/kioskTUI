@@ -28,6 +28,6 @@ int data_daily_get(int day_idx, const char *name);
 int data_daily_time(int day_idx, long *out_time);
 
 int data_latest_purchase(long *ts_out, PurchaseItem *items_out, int max_items);
-
+int data_purchase_count(void);
 /* Invalidates all in-memory caches, forcing a fresh DB read on next access. */
 void data_reload(void);

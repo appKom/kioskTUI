@@ -338,3 +338,24 @@ int data_latest_purchase(long *ts_out, PurchaseItem *items_out, int max_items) {
     *ts_out = ts;
   return count;
 }
+
+int data_purchase_count(void) {
+  sqlite3 *db = open_db();
+  if (!db)
+    return 0;
+
+  sqlite3_stmt *stmt = NULL;
+  int count = 0;
+
+  int rc = sqlite3_prepare_v2(
+      db, "SELECT COUNT(DISTINCT purchased_at) FROM PURCHASES;", -1, &stmt,
+      NULL);
+
+  if (rc == SQLITE_OK && sqlite3_step(stmt) == SQLITE_ROW)
+    count = sqlite3_column_int(stmt, 0);
+
+  sqlite3_finalize(stmt);
+  sqlite3_close(db);
+
+  return count;
+}
