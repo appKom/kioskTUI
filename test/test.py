@@ -315,6 +315,40 @@ def test_add_specific():
     offer_cleanup(start_ts)
 
 
+def test_bulk_purchases():
+    separator("TEST: Inject X purchases")
+
+    products = get_products()
+    if not products:
+        print("No products in DB.")
+        return
+
+    try:
+        count = int(input("Number of purchases to inject: ").strip())
+        if count <= 0:
+            print("Must be > 0.")
+            return
+    except ValueError:
+        print("Invalid number.")
+        return
+
+    start_ts = int(time.time())
+
+    print(f"Inserting {count} purchases...")
+
+    for i in range(count):
+        name = random.choice(products)
+        qty = random.randint(1, 3)
+
+        insert_purchase([(name, qty)], purchased_at=start_ts + i)
+
+        if (i + 1) % 50 == 0 or i + 1 == count:
+            print(f"  {i + 1}/{count}")
+
+    print("Done.")
+    offer_cleanup(start_ts)
+
+
 TESTS = {
     "1": ("Single item purchase", test_single_item),
     "2": ("Multi-item basket grouping", test_multi_item),
@@ -325,6 +359,7 @@ TESTS = {
     "7": ("Leaderboard reorder", test_leaderboard_reorder),
     "8": ("DB write latency benchmark", test_response_rate),
     "9": ("Add specific item and quantity", test_add_specific),
+    "10": ("Add bulk purchases", test_bulk_purchases),
 }
 
 
