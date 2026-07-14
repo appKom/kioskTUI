@@ -369,6 +369,105 @@ static void draw_latest_window(WINDOW *win) {
   }
 }
 
+static void draw_confetti_animation(int rows, int cols) {
+  static const char *lines[] = {
+      "█▀▀ █▀▀ █▀█ ▀█▀ ▀█▀ █▀▀ ▀█▀ █▀▀ █▀▄    █▀█ █▀█ █▀█ █ █ █▀█ █▀█▀█    █▀▀ "
+      "█   █▀█ █▀▀ █▀▀ ▀█▀ █▀▀",
+      "▓░  ▓▀  ▓▀▄  ▓░  ▓░ ▓▀   ▓░ ▓▀  █ ▓    █▀▓ ▓▀  ▓▀  ▓▀▄ █ ▓ █   ▓    ▓░  "
+      "▓░  █▀▓ ▀▀▓ ▀▀▓  ▓░ ▓░ ",
+      "▀▀▀ ▀▀▀ ▀ ▀  ▀  ▀▀▀ ▀   ▀▀▀ ▀▀▀ ▀▀     ▀ ▀ ▀   ▀   ▀ ▀ ▀▀▀ ▀   ▀    ▀▀▀ "
+      "▀▀▀ ▀ ▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀▀▀",
+      NULL};
+
+  int n_lines = 0;
+  while (lines[n_lines])
+    n_lines++;
+
+  static const int colors[] = {CP_TOP1,   CP_TOP2,   CP_ALERT,  CP_ACCENT,
+                               CP_BANNER, CP_LINE_1, CP_LINE_2, CP_LINE_3,
+                               CP_LINE_4, CP_LINE_5};
+
+  static const char pieces[] = "*+xo.#";
+
+  int n_colors = sizeof(colors) / sizeof(colors[0]);
+
+  srand((unsigned int)time(NULL));
+
+  Confetti confetti[MAX_CONFETTI];
+
+  for (int i = 0; i < MAX_CONFETTI; i++) {
+    confetti[i].x = rand() % cols;
+    confetti[i].y = -(rand() % rows);
+    confetti[i].speed = rand() % 3 + 1;
+    confetti[i].dx = (rand() % 3) - 1;
+    confetti[i].color = colors[rand() % n_colors];
+    confetti[i].ch = pieces[rand() % (sizeof(pieces) - 1)];
+  }
+
+  int total_frames = rows + n_lines + 20;
+
+  for (int frame = 0; frame < total_frames; frame++) {
+    erase();
+
+    for (int i = 0; i < MAX_CONFETTI; i++) {
+
+      if (confetti[i].y >= 0 && confetti[i].y < rows && confetti[i].x >= 0 &&
+          confetti[i].x < cols) {
+
+        if (has_colors())
+          attron(COLOR_PAIR(confetti[i].color) | A_BOLD);
+
+        mvaddch(confetti[i].y, confetti[i].x, confetti[i].ch);
+
+        if (has_colors())
+          attroff(COLOR_PAIR(confetti[i].color) | A_BOLD);
+      }
+
+      confetti[i].y += confetti[i].speed;
+      confetti[i].x += confetti[i].dx;
+
+      if (confetti[i].x < 0)
+        confetti[i].x = cols - 1;
+      else if (confetti[i].x >= cols)
+        confetti[i].x = 0;
+
+      if (confetti[i].y >= rows) {
+        confetti[i].y = -(rand() % rows);
+        confetti[i].x = rand() % cols;
+        confetti[i].speed = rand() % 3 + 1;
+        confetti[i].dx = (rand() % 3) - 1;
+        confetti[i].color = colors[rand() % n_colors];
+        confetti[i].ch = pieces[rand() % (sizeof(pieces) - 1)];
+      }
+    }
+
+    for (int i = 0; i < n_lines; i++) {
+      int y = frame - (n_lines - 1 - i) - 2;
+
+      if (y < 0 || y >= rows)
+        continue;
+
+      int len = (int)strlen(lines[i]);
+      int x = (cols - len) / 2;
+      if (x < 0)
+        x = 0;
+
+      if (has_colors())
+        attron(COLOR_PAIR(CP_BANNER) | A_BOLD);
+
+      mvprintw(y, x, "%s", lines[i]);
+
+      if (has_colors())
+        attroff(COLOR_PAIR(CP_BANNER) | A_BOLD);
+    }
+
+    refresh();
+    napms(50);
+  }
+
+  napms(300);
+  clearok(curscr, TRUE);
+}
 void ui_init(void) {
   struct sigaction sa;
   memset(&sa, 0, sizeof sa);
@@ -391,6 +490,11 @@ void ui_run(void) {
 
   WINDOW *top = NULL, *bot = NULL, *chart = NULL, *latest = NULL;
   int have_win = 0;
+  long last_purchase_ts = 0;
+  {
+    PurchaseItem tmp[1];
+    data_latest_purchase(&last_purchase_ts, tmp, 1);
+  }
 
   if (compute_layout(rows, cols, &lo))
     have_win = apply_layout(&top, &bot, &chart, &latest, &lo);
@@ -418,6 +522,17 @@ void ui_run(void) {
         slide = 0;
       last_reload = now;
     }
+    PurchaseItem tmp[1];
+    long new_ts = 0;
+    data_latest_purchase(&new_ts, tmp, 1);
+
+    if (new_ts > last_purchase_ts && last_purchase_ts > 0) {
+      int purchase_count = data_purchase_count();
+      if (purchase_count > 0 && purchase_count % 100 == 0)
+        draw_confetti_animation(rows, cols);
+    }
+
+    last_purchase_ts = new_ts;
 
     if (resized) {
       resized = 0;
