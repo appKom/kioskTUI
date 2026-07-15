@@ -1,0 +1,24 @@
+[Unit]
+Description=Kiosk TUI Leaderboard
+After=multi-user.target
+
+[Service]
+Type=simple
+User=<your-user>
+WorkingDirectory=/opt/leaderboard
+ExecStart=/opt/leaderboard/leaderboard
+Restart=always
+RestartSec=2
+
+StandardInput=tty-force
+StandardOutput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=no
+
+Environment=TERM=linux
+Environment=LANG=nb_NO.UTF-8
+
+[Install]
+WantedBy=multi-user.target
