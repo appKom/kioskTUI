@@ -1,6 +1,7 @@
 [Unit]
 Description=Kiosk TUI Leaderboard
-After=multi-user.target
+After=systemd-user-sessions.service network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -12,6 +13,8 @@ RestartSec=2
 
 StandardInput=tty-force
 StandardOutput=tty
+StandardError=journal
+
 TTYPath=/dev/tty1
 TTYReset=yes
 TTYVHangup=yes
