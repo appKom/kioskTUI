@@ -553,10 +553,39 @@ void ui_run(void) {
     int remaining = SLIDE_SECONDS - (int)(now - slide_start);
     werase(stdscr);
     draw_banner(cols, lo.banner_lines);
+
+    char timebuf[16];
+    time_t now_t = (time_t)now;
+    struct tm *tp = localtime(&now_t);
+    if (tp)
+      strftime(timebuf, sizeof timebuf, "%H:%M:%S", tp);
+    else
+      snprintf(timebuf, sizeof timebuf, "--:--:--");
+
+    char syncbuf[24] = "Sync: ?";
+    {
+      char hbpath[512];
+      snprintf(hbpath, sizeof hbpath, "sync.heartbeat");
+      FILE *hb = fopen(hbpath, "r");
+      if (hb) {
+        long hbts = 0;
+        if (fscanf(hb, "%ld", &hbts) == 1) {
+          int age = (int)(now - (time_t)hbts);
+          if (age < 5)
+            snprintf(syncbuf, sizeof syncbuf, "Sync: OK");
+          else if (age < 60)
+            snprintf(syncbuf, sizeof syncbuf, "Sync: %ds ago", age);
+          else
+            snprintf(syncbuf, sizeof syncbuf, "Sync: STALE");
+        }
+        fclose(hb);
+      }
+    }
+
     printw_centered_stdscr_safe(
         rows - FOOTER_LINES, cols,
-        "Slide %d/%d | Next in %ds | Tab: advance | q: quit | %dx%d", slide + 1,
-        n_slides, remaining, cols, rows);
+        "Slide %d/%d | Next in %ds | Tab: advance | q: quit | %s | %s",
+        slide + 1, n_slides, remaining, syncbuf, timebuf);
 
     if (have_win) {
       draw_top_window(top, lo.fame_lines);

@@ -30,6 +30,7 @@ CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 PROJECT_ROOT = find_project_root(CURRENT_DIR)
 DB_PATH = os.path.join(PROJECT_ROOT, "src/backend/example.db")
 STATE_FILE = os.path.join(PROJECT_ROOT, "sync_state.json")
+HEARTBEAT_FILE = os.path.join(PROJECT_ROOT, "sync.heartbeat")
 
 PURCHASE_API = "https://purchase.izettle.com/purchases/v2"
 PRODUCTS_API = "https://products.izettle.com/organizations/self/products/v2"
@@ -340,6 +341,8 @@ def main():
             try:
                 with conn:
                     prune_old_data(conn)
+                    with open(HEARTBEAT_FILE, "w") as f:
+                        f.write(str(int(time.time())))
             finally:
                 conn.close()
 
