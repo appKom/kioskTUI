@@ -40,6 +40,37 @@ Finally the binaries can be built and the application launched in the terminal
 make && ./leaderboard
 ```
 
+## Automation
+
+For it to run persistently on a machine, a systemd service file for leaderboard and sync (TODO) has been added. Since it uses systemd specific configurations, if the linux distribution uses another init system, it won't work out of the box. An equivalent service definition would have to be created for these systems.
+Before enabling the service, change the values in both service files to:
+
+User= to the user account that should run the application.
+WorkingDirectory= to the directory containing the application.
+ExecStart= to the full path of the executable.
+
+Afterwards copy the service file to /etc/systemd/system/
+
+```bash
+sudo cp leaderboard.service /etc/systemd/system/
+sudo cp sync.service /etc/systemd/system/
+```
+
+Then reload systemd and enable the service
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now leaderboard.service
+sudo systemctl enable --now sync.service
+```
+
+To confirm that it works, run:
+
+```bash
+sudo systemctl status leaderboard.service
+sudo systemctl status sync.service
+```
+
 ## Testing
 
 Run the testing framework using:
