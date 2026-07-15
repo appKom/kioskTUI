@@ -1,8 +1,11 @@
 leaderboard
-src/backend/example.db
-src/backend/create
 .env
 tokens.json
 sync_state.json
 leaderboard.log
+sync.heartbeat
+
+src/backend/example.db
+src/backend/create
 obj/*
+
