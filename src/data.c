@@ -339,6 +339,35 @@ int data_latest_purchase(long *ts_out, PurchaseItem *items_out, int max_items) {
   return count;
 }
 
+int data_trend(const char *name) {
+  compute_daily();
+  if (!name || hist_day_count < 2)
+    return 0;
+
+  int days = hist_day_count;
+  int this_start = (days >= 7) ? days - 7 : 0;
+  int last_start = (days >= 14) ? days - 14 : 0;
+  int last_end = this_start;
+
+  int this_week = 0, last_week = 0;
+  for (int d = this_start; d < days; d++) {
+    int v = data_daily_get(d, name);
+    if (v > 0)
+      this_week += v;
+  }
+  for (int d = last_start; d < last_end; d++) {
+    int v = data_daily_get(d, name);
+    if (v > 0)
+      last_week += v;
+  }
+
+  if (this_week > last_week)
+    return 1;
+  if (this_week < last_week)
+    return -1;
+  return 0;
+}
+
 int data_purchase_count(void) {
   sqlite3 *db = open_db();
   if (!db)
