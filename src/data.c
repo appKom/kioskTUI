@@ -34,6 +34,7 @@ static sqlite3 *open_db(void) {
     sqlite3_close(db);
     return NULL;
   }
+  sqlite3_exec(db, "PRAGMA journal_mode=WAL;", NULL, NULL, NULL);
   return db;
 }
 
