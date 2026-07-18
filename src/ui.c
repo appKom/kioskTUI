@@ -636,7 +636,7 @@ void ui_run(void) {
 
     char syncbuf[24] = "Sync: ?";
     {
-      FILE *hb = fopen("src/backend/sync.heartbeat", "r");
+      FILE *hb = fopen("sync.heartbeat", "r");
       if (hb) {
         long hbts = 0;
         if (fscanf(hb, "%ld", &hbts) == 1) {
