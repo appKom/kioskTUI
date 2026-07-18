@@ -13,6 +13,7 @@
 
 #define PRINT_BUF_SIZE 512
 #define MAX_NAME_COLS 24
+#define REV_COL_W 12
 
 static char **loaded_banner = NULL;
 static char **loaded_fame = NULL;
@@ -110,7 +111,7 @@ static void fmt_revenue(char *buf, size_t bufsz, int qty, int price_ore) {
 }
 
 static void fmt_row(char *buf, size_t bufsz, int rank, const char *name,
-                    int qty, int price_ore, int name_w) {
+                    int qty, int price_ore, int name_w, int trend) {
   char name_col[MAX_NAME_COLS + 4];
   int nw = utf8_display_width(name);
   if (nw <= name_w) {
@@ -120,13 +121,22 @@ static void fmt_row(char *buf, size_t bufsz, int rank, const char *name,
     strncat(name_col, "\xe2\x80\xa6", sizeof name_col - strlen(name_col) - 1);
   }
 
+  /* ↑ U+2191 = \xe2\x86\x91, ↓ U+2193 = \xe2\x86\x93 */
+  const char *arrow = (trend > 0)   ? "\xe2\x86\x91"
+                      : (trend < 0) ? "\xe2\x86\x93"
+                                    : " ";
+
+  char rev_col[REV_COL_W + 8];
   if (price_ore > 0) {
     char rev[24];
     fmt_revenue(rev, sizeof rev, qty, price_ore);
-    snprintf(buf, bufsz, "%2d. %s %6d    %12s", rank, name_col, qty, rev);
+    snprintf(rev_col, sizeof rev_col, "%*s", REV_COL_W, rev);
   } else {
-    snprintf(buf, bufsz, "%2d. %s %6d", rank, name_col, qty);
+    snprintf(rev_col, sizeof rev_col, "%*s", REV_COL_W, "");
   }
+
+  snprintf(buf, bufsz, "%2d. %s %s %5d  %s", rank, name_col, arrow, qty,
+           rev_col);
 }
 
 static const int top_row_color_pairs[] = {CP_TOP1, CP_TOP2, CP_ALERT};
@@ -163,15 +173,34 @@ void draw_rows_in_win_centered_safe(WINDOW *win, int start_y, int capacity,
     const Item *item = data_get(idx);
     if (!item)
       break;
+
+    int trend = data_trend(item->product);
+
     char row[PRINT_BUF_SIZE];
     fmt_row(row, sizeof row, i + 1, item->product, item->qty, item->price,
-            name_w);
+            name_w, trend);
+
     bool highlight = (i < TOP_ROW_COLORED) && has_colors();
     if (highlight)
       wattron(win, COLOR_PAIR(top_row_color_pairs[i]) | A_BOLD);
     mvwprintw_centered_safe(win, start_y + i, "%s", row);
     if (highlight)
       wattroff(win, COLOR_PAIR(top_row_color_pairs[i]) | A_BOLD);
+
+    /* Overlay the trend arrow with its own color on non-highlighted rows. */
+    if (!highlight && has_colors() && trend != 0) {
+      int row_len = utf8_display_width(row);
+      int win_cols = getmaxx(win);
+      int row_x = clamp_x_to_inner((win_cols - row_len) / 2, row_len, win_cols);
+      /* Arrow sits at: "NN. " (4) + name_w + " " (1) = name_w + 5 display cols
+       */
+      int arrow_x = row_x + 4 + name_w + 1;
+      int cp = (trend > 0) ? CP_TOP2 : CP_ALERT;
+      wattron(win, COLOR_PAIR(cp) | A_BOLD);
+      mvwprintw(win, start_y + i, arrow_x, "%s",
+                (trend > 0) ? "\xe2\x86\x91" : "\xe2\x86\x93");
+      wattroff(win, COLOR_PAIR(cp) | A_BOLD);
+    }
   }
 }
 
@@ -187,7 +216,7 @@ void draw_rows_on_stdscr_centered_safe(int start_y, int rows, int cols) {
       break;
     char row[PRINT_BUF_SIZE];
     fmt_row(row, sizeof row, i + 1, item->product, item->qty, item->price,
-            name_w);
+            name_w, data_trend(item->product));
     int len = utf8_display_width(row);
     int x = (cols - len) / 2;
     if (x < 0)
@@ -196,6 +225,7 @@ void draw_rows_on_stdscr_centered_safe(int start_y, int rows, int cols) {
   }
 }
 
+// chart
 static const int line_colors[5] = {CP_LINE_1, CP_LINE_2, CP_LINE_3, CP_LINE_4,
                                    CP_LINE_5};
 
@@ -383,20 +413,17 @@ void draw_chart_window(WINDOW *win, int slide, int n_slides) {
     int color_pair = line_colors[slot % 5];
     int prev_row = -1, prev_col = -1;
     int cumulative = 0;
-
     for (int d = 0; d < days; ++d) {
       int v = data_daily_get(d, item->product);
       if (v > 0)
         cumulative += v;
       if (cumulative == 0)
         continue;
-
       long ts = 0;
       data_daily_time(d, &ts);
       ts = ts - (ts % 86400);
       int cur_col = ts_to_col(ts, ts_first, range_days, plot_x0, plot_w);
       int cur_row = val_to_row(cumulative, max_val, plot_top, plot_bot);
-
       if (prev_row == -1) {
         if (has_colors())
           wattron(win, COLOR_PAIR(color_pair) | A_BOLD);
@@ -428,12 +455,20 @@ void draw_chart_window(WINDOW *win, int slide, int n_slides) {
       break;
     if (has_colors())
       wattron(win, COLOR_PAIR(line_colors[slot % 5]) | A_BOLD);
-    mvwprintw(win, y, 2, "-- %s  %d units", item->product, item->qty);
+    if (item->price > 0) {
+      char rev[24];
+      fmt_revenue(rev, sizeof rev, item->qty, item->price);
+      mvwprintw(win, y, 2, "-- %s  %d units  ~%s", item->product, item->qty,
+                rev);
+    } else {
+      mvwprintw(win, y, 2, "-- %s  %d units", item->product, item->qty);
+    }
     if (has_colors())
       wattroff(win, COLOR_PAIR(line_colors[slot % 5]) | A_BOLD);
   }
 }
 
+// banner
 void draw_load_banners(void) {
   loaded_banner = load_banner_by_name("default");
   loaded_fame = load_banner_by_name("fame");
