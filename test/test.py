@@ -349,6 +349,26 @@ def test_bulk_purchases():
     offer_cleanup(start_ts)
 
 
+def get_db_data():
+    conn = open_db()
+    count = conn.execute(
+        "SELECT COUNT(DISTINCT purchased_at) FROM PURCHASES"
+    ).fetchone()[0]
+    latest = conn.execute(
+        "SELECT purchased_at, name, units FROM PURCHASES WHERE purchased_at = (SELECT MAX(purchased_at) FROM PURCHASES) ORDER BY units DESC"
+    ).fetchone()
+    distinct_products = conn.execute(
+        "SELECT COUNT(DISTINCT name) FROM PURCHASES"
+    ).fetchone()[0]
+    conn.close()
+    print()
+    print(f"Total purchase count \n{count}\n")
+    print(f"Distinct products \n{distinct_products}\n")
+    print(f"Latest purchase \n {tuple(latest)}\n")
+
+    print()
+
+
 TESTS = {
     "1": ("Single item purchase", test_single_item),
     "2": ("Multi-item basket grouping", test_multi_item),
@@ -360,6 +380,7 @@ TESTS = {
     "8": ("DB write latency benchmark", test_response_rate),
     "9": ("Add specific item and quantity", test_add_specific),
     "10": ("Add bulk purchases", test_bulk_purchases),
+    "h": ("View summary of data stored in database", get_db_data),
 }
 
 

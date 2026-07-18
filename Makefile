@@ -65,13 +65,15 @@ db: $(CREATE_BIN)
 	$(CREATE_BIN)
 	@echo "Database ready."
 
-# make resetdb  — wipe and rebuild the database from scratch
+# make resetdb  — wipe and rebuild the database from scratch, also resets sync state
 .PHONY: resetdb
 resetdb:
 	@echo "Removing old database..."
 	rm -f $(DB_SRCDIR)/example.db
 	$(MAKE) db
 	@echo "Database reset"
+	rm -f sync_state.json
+	@echo "Sync reset"
 
 # ── Run ────────────────────────────────────────────────────────────────
 .PHONY: run
