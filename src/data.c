@@ -1,4 +1,3 @@
-#define _XOPEN_SOURCE 700
 #include "data.h"
 #include <sqlite3.h>
 #include <stdio.h>
@@ -6,9 +5,7 @@
 #include <string.h>
 #include <time.h>
 
-#define MAX_ITEMS 256
-#define MAX_BUCKETS 10000
-#define MAX_DAYS 365
+enum { MAX_ITEMS = 256, MAX_BUCKETS = 10000, MAX_DAYS = 365 };
 #define DB_PATH "src/backend/example.db"
 
 static Item items[MAX_ITEMS];
@@ -42,8 +39,9 @@ static int row_cb(void *unused, int cols, char **vals, char **names) {
   (void)unused;
   (void)cols;
   (void)names;
-  if (items_count >= MAX_ITEMS)
+  if (items_count >= MAX_ITEMS) {
     return 0;
+  }
   strncpy(items[items_count].product, vals[0] ? vals[0] : "",
           sizeof items[0].product - 1);
   items[items_count].qty = vals[1] ? atoi(vals[1]) : 0;
@@ -53,13 +51,15 @@ static int row_cb(void *unused, int cols, char **vals, char **names) {
 }
 
 static void load_from_db(void) {
-  if (loaded)
+  if (loaded) {
     return;
+  }
   loaded = 1;
   items_count = 0;
   sqlite3 *db = open_db();
-  if (!db)
+  if (!db) {
     return;
+  }
   char *err = NULL;
   int rc = sqlite3_exec(db, "SELECT NAME, AMOUNT, PRICE FROM PRODUCT;", row_cb,
                         NULL, &err);
@@ -71,13 +71,15 @@ static void load_from_db(void) {
 }
 
 static void load_history(void) {
-  if (hist_loaded)
+  if (hist_loaded) {
     return;
+  }
   hist_loaded = 1;
 
   sqlite3 *db = open_db();
-  if (!db)
+  if (!db) {
     return;
+  }
 
   sqlite3_stmt *stmt = NULL;
   int rc;
@@ -91,8 +93,9 @@ static void load_history(void) {
     return;
   }
   hist_bucket_count = 0;
-  while (sqlite3_step(stmt) == SQLITE_ROW && hist_bucket_count < MAX_BUCKETS)
+  while (sqlite3_step(stmt) == SQLITE_ROW && hist_bucket_count < MAX_BUCKETS) {
     hist_times[hist_bucket_count++] = (long)sqlite3_column_int64(stmt, 0);
+  }
   sqlite3_finalize(stmt);
 
   rc = sqlite3_prepare_v2(
@@ -110,9 +113,11 @@ static void load_history(void) {
   }
   sqlite3_finalize(stmt);
 
-  for (int b = 0; b < hist_bucket_count; ++b)
-    for (int i = 0; i < hist_item_count; ++i)
+  for (int b = 0; b < hist_bucket_count; ++b) {
+    for (int i = 0; i < hist_item_count; ++i) {
       hist_amounts[b][i] = -1;
+    }
+  }
 
   rc = sqlite3_prepare_v2(
       db, "SELECT snapshot_time, name, amount FROM SALES_HISTORY;", -1, &stmt,
@@ -126,31 +131,36 @@ static void load_history(void) {
     const char *n = (const char *)sqlite3_column_text(stmt, 1);
     int amount = sqlite3_column_int(stmt, 2);
     int bi = -1;
-    for (int b = 0; b < hist_bucket_count; ++b)
+    for (int b = 0; b < hist_bucket_count; ++b) {
       if (hist_times[b] == ts) {
         bi = b;
         break;
       }
+    }
     int ii = -1;
-    for (int i = 0; i < hist_item_count; ++i)
+    for (int i = 0; i < hist_item_count; ++i) {
       if (n && strncmp(hist_names[i], n, PRODUCT_NAME_MAX) == 0) {
         ii = i;
         break;
       }
-    if (bi >= 0 && ii >= 0)
+    }
+    if (bi >= 0 && ii >= 0) {
       hist_amounts[bi][ii] = amount;
+    }
   }
   sqlite3_finalize(stmt);
   sqlite3_close(db);
 }
 
 static void compute_daily(void) {
-  if (daily_computed)
+  if (daily_computed) {
     return;
+  }
   daily_computed = 1;
   load_history();
-  if (hist_bucket_count == 0)
+  if (hist_bucket_count == 0) {
     return;
+  }
 
   long day_keys[MAX_DAYS];
   int day_last_bucket[MAX_DAYS];
@@ -159,14 +169,16 @@ static void compute_daily(void) {
   for (int b = 0; b < hist_bucket_count; ++b) {
     long day_ts = hist_times[b] - (hist_times[b] % 86400);
     int di = -1;
-    for (int d = 0; d < hist_day_count; ++d)
+    for (int d = 0; d < hist_day_count; ++d) {
       if (day_keys[d] == day_ts) {
         di = d;
         break;
       }
+    }
     if (di == -1) {
-      if (hist_day_count >= MAX_DAYS)
+      if (hist_day_count >= MAX_DAYS) {
         break;
+      }
       di = hist_day_count++;
       day_keys[di] = day_ts;
       hist_day_ts[di] = day_ts;
@@ -181,11 +193,13 @@ static void compute_daily(void) {
     for (int d = 0; d < hist_day_count; ++d) {
       int b = day_last_bucket[d];
       int cum = hist_amounts[b][i];
-      if (cum < 0)
+      if (cum < 0) {
         cum = prev_cum;
+      }
       hist_daily[d][i] = cum - prev_cum;
-      if (hist_daily[d][i] < 0)
+      if (hist_daily[d][i] < 0) {
         hist_daily[d][i] = 0;
+      }
       prev_cum = cum;
     }
   }
@@ -198,20 +212,23 @@ int data_count(void) {
 
 const Item *data_get(int idx) {
   load_from_db();
-  if (idx < 0 || idx >= items_count)
+  if (idx < 0 || idx >= items_count) {
     return NULL;
+  }
   return &items[idx];
 }
 
 void data_sort_by_qty_desc(void) {
   load_from_db();
-  for (int i = 0; i < items_count; ++i)
-    for (int j = i + 1; j < items_count; ++j)
+  for (int i = 0; i < items_count; ++i) {
+    for (int j = i + 1; j < items_count; ++j) {
       if (items[j].qty > items[i].qty) {
         Item tmp = items[i];
         items[i] = items[j];
         items[j] = tmp;
       }
+    }
+  }
 }
 
 void data_reload(void) {
@@ -226,13 +243,15 @@ void data_reload(void) {
 
 void data_snapshot(void) {
   load_from_db();
-  if (items_count == 0)
+  if (items_count == 0) {
     return;
+  }
   sqlite3 *db = open_db();
-  if (!db)
+  if (!db) {
     return;
+  }
   time_t now = time(NULL);
-  long slot = (long)(now - now % 3600);
+  long slot = (long)(now - (now % 3600));
   sqlite3_stmt *stmt = NULL;
   int rc = sqlite3_prepare_v2(
       db,
@@ -265,18 +284,22 @@ int data_history_count(void) {
 
 int data_history_get(int bucket_idx, const char *name) {
   load_history();
-  if (bucket_idx < 0 || bucket_idx >= hist_bucket_count || !name)
+  if (bucket_idx < 0 || bucket_idx >= hist_bucket_count || !name) {
     return -1;
-  for (int i = 0; i < hist_item_count; ++i)
-    if (strncmp(hist_names[i], name, PRODUCT_NAME_MAX) == 0)
+  }
+  for (int i = 0; i < hist_item_count; ++i) {
+    if (strncmp(hist_names[i], name, PRODUCT_NAME_MAX) == 0) {
       return hist_amounts[bucket_idx][i];
+    }
+  }
   return -1;
 }
 
 int data_history_time(int bucket_idx, long *out_time) {
   load_history();
-  if (bucket_idx < 0 || bucket_idx >= hist_bucket_count || !out_time)
+  if (bucket_idx < 0 || bucket_idx >= hist_bucket_count || !out_time) {
     return -1;
+  }
   *out_time = hist_times[bucket_idx];
   return 0;
 }
@@ -288,26 +311,31 @@ int data_daily_count(void) {
 
 int data_daily_get(int day_idx, const char *name) {
   compute_daily();
-  if (day_idx < 0 || day_idx >= hist_day_count || !name)
+  if (day_idx < 0 || day_idx >= hist_day_count || !name) {
     return -1;
-  for (int i = 0; i < hist_item_count; ++i)
-    if (strncmp(hist_names[i], name, PRODUCT_NAME_MAX) == 0)
+  }
+  for (int i = 0; i < hist_item_count; ++i) {
+    if (strncmp(hist_names[i], name, PRODUCT_NAME_MAX) == 0) {
       return hist_daily[day_idx][i];
+    }
+  }
   return -1;
 }
 
 int data_daily_time(int day_idx, long *out_time) {
   compute_daily();
-  if (day_idx < 0 || day_idx >= hist_day_count || !out_time)
+  if (day_idx < 0 || day_idx >= hist_day_count || !out_time) {
     return -1;
+  }
   *out_time = hist_day_ts[day_idx];
   return 0;
 }
 
 int data_latest_purchase(long *ts_out, PurchaseItem *items_out, int max_items) {
   sqlite3 *db = open_db();
-  if (!db)
+  if (!db) {
     return 0;
+  }
 
   sqlite3_stmt *stmt = NULL;
   int rc = sqlite3_prepare_v2(
@@ -324,8 +352,9 @@ int data_latest_purchase(long *ts_out, PurchaseItem *items_out, int max_items) {
   int count = 0;
   long ts = 0;
   while (sqlite3_step(stmt) == SQLITE_ROW && count < max_items) {
-    if (count == 0)
+    if (count == 0) {
       ts = (long)sqlite3_column_int64(stmt, 0);
+    }
     const char *name = (const char *)sqlite3_column_text(stmt, 1);
     strncpy(items_out[count].name, name ? name : "", PRODUCT_NAME_MAX - 1);
     items_out[count].name[PRODUCT_NAME_MAX - 1] = '\0';
@@ -335,44 +364,52 @@ int data_latest_purchase(long *ts_out, PurchaseItem *items_out, int max_items) {
   sqlite3_finalize(stmt);
   sqlite3_close(db);
 
-  if (ts_out)
+  if (ts_out) {
     *ts_out = ts;
+  }
   return count;
 }
 
 int data_trend(const char *name) {
   compute_daily();
-  if (!name || hist_day_count < 2)
+  if (!name || hist_day_count < 2) {
     return 0;
+  }
 
   int days = hist_day_count;
   int this_start = (days >= 7) ? days - 7 : 0;
   int last_start = (days >= 14) ? days - 14 : 0;
   int last_end = this_start;
 
-  int this_week = 0, last_week = 0;
+  int this_week = 0;
+  int last_week = 0;
   for (int d = this_start; d < days; d++) {
     int v = data_daily_get(d, name);
-    if (v > 0)
+    if (v > 0) {
       this_week += v;
+    }
   }
   for (int d = last_start; d < last_end; d++) {
     int v = data_daily_get(d, name);
-    if (v > 0)
+    if (v > 0) {
       last_week += v;
+    }
   }
 
-  if (this_week > last_week)
+  if (this_week > last_week) {
     return 1;
-  if (this_week < last_week)
+  }
+  if (this_week < last_week) {
     return -1;
+  }
   return 0;
 }
 
 int data_purchase_count(void) {
   sqlite3 *db = open_db();
-  if (!db)
+  if (!db) {
     return 0;
+  }
 
   sqlite3_stmt *stmt = NULL;
   int count = 0;
@@ -381,8 +418,9 @@ int data_purchase_count(void) {
       db, "SELECT COUNT(DISTINCT purchased_at) FROM PURCHASES;", -1, &stmt,
       NULL);
 
-  if (rc == SQLITE_OK && sqlite3_step(stmt) == SQLITE_ROW)
+  if (rc == SQLITE_OK && sqlite3_step(stmt) == SQLITE_ROW) {
     count = sqlite3_column_int(stmt, 0);
+  }
 
   sqlite3_finalize(stmt);
   sqlite3_close(db);

@@ -1,7 +1,9 @@
 #pragma once
 #include <stddef.h>
 
-#define PRODUCT_NAME_MAX 64
+enum {
+PRODUCT_NAME_MAX = 64
+};
 
 typedef struct {
   char product[PRODUCT_NAME_MAX];

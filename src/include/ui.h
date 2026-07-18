@@ -2,7 +2,9 @@
 #define UI_H
 #include <ncurses.h>
 
-#define MAX_CONFETTI 500
+enum {
+MAX_CONFETTI = 500
+};
 
 void ui_init(void);
 void ui_run(void);

@@ -1,6 +1,4 @@
-#define _XOPEN_SOURCE 700
 #include "ui.h"
-#include "banners.h"
 #include "colors.h"
 #include "config.h"
 #include "data.h"
@@ -24,13 +22,17 @@ static int clamp_i(int v, int lo, int hi) {
 }
 static int max_i(int a, int b) { return a > b ? a : b; }
 
-#define SLIDE_SECONDS 5
-#define TICK_MS 500
-#define RELOAD_SECONDS 1
-#define MIN_CHART_H 10
-#define MIN_LATEST_H 8
-#define LATEST_ITEM_MAX 16
-#define LEADERBOARD_ITEMS 5
+enum {
+  SLIDE_SECONDS = 5,
+  TICK_MS = 500,
+  RELOAD_SECONDS = 1,
+  MIN_CHART_H = 10,
+  MIN_LATEST_H = 8,
+  LATEST_ITEM_MAX = 16,
+  LEADERBOARD_ITEMS = 5
+};
+
+enum { PURCHASE_HIGHLIGHT_SECS = 5 };
 
 typedef enum { LAYOUT_STACKED, LAYOUT_SIDE_BY_SIDE } LayoutMode;
 
@@ -47,26 +49,30 @@ static int ideal_panel_h(int banner_lines) {
 }
 
 static int try_side_by_side(int rows, int cols, Layout *out) {
-  if (cols <= rows * 2)
+  if (cols <= rows * 2) {
     return 0;
-
-  int win_w = cols - SIDE_MARGIN * 2;
+  }
+  int win_w = cols - (SIDE_MARGIN * 2);
   int half_w = win_w / 2;
-  if (half_w < MIN_WIN_W)
+  if (half_w < MIN_WIN_W) {
     return 0;
+  }
 
   int banner_lines = out->banner_lines;
   int fame_lines = out->fame_lines;
   int lame_lines = out->lame_lines;
-
   int *trim[3] = {&banner_lines, &fame_lines, &lame_lines};
   int max_iters = banner_lines + fame_lines + lame_lines;
 
   for (int iter = 0; iter <= max_iters; ++iter) {
     int avail = rows - (banner_lines + 1 + FOOTER_LINES);
-
-    int win_h = max_i(ideal_panel_h(fame_lines), ideal_panel_h(lame_lines));
+    int base_win_h =
+        max_i(ideal_panel_h(fame_lines), ideal_panel_h(lame_lines));
     int latest_h = MIN_LATEST_H;
+    int base_chart_h = avail - base_win_h - latest_h;
+    int surplus = base_chart_h - MIN_CHART_H;
+    int padding = (surplus >= 2) ? 2 : 0;
+    int win_h = base_win_h + padding;
     int chart_h = avail - win_h - latest_h;
 
     if (chart_h >= MIN_CHART_H) {
@@ -77,7 +83,6 @@ static int try_side_by_side(int rows, int cols, Layout *out) {
       y += chart_h;
       int latest_y = y;
       y += latest_h + FOOTER_LINES;
-
       if (y <= rows) {
         out->mode = LAYOUT_SIDE_BY_SIDE;
         out->banner_lines = banner_lines;
@@ -95,39 +100,43 @@ static int try_side_by_side(int rows, int cols, Layout *out) {
         return 1;
       }
     }
-
-    bool trimmed = 0;
+    bool trimmed = false;
     for (int k = 0; k < 3 && !trimmed; ++k) {
       int idx = (iter + k) % 3;
       if (*trim[idx] > 1) {
         --(*trim[idx]);
-        trimmed = 1;
+        trimmed = true;
       }
     }
-    if (!trimmed)
+    if (!trimmed) {
       break;
+    }
   }
   return 0;
 }
 
 static int try_stacked(int rows, int cols, Layout *out) {
-  int win_w = cols - SIDE_MARGIN * 2;
-  if (win_w < MIN_WIN_W)
+  int win_w = cols - (SIDE_MARGIN * 2);
+  if (win_w < MIN_WIN_W) {
     return 0;
+  }
 
   int banner_lines = out->banner_lines;
   int fame_lines = out->fame_lines;
   int lame_lines = out->lame_lines;
-
   int *trim[3] = {&banner_lines, &fame_lines, &lame_lines};
   int max_iters = banner_lines + fame_lines + lame_lines;
 
   for (int iter = 0; iter <= max_iters; ++iter) {
     int avail = rows - (banner_lines + 1 + FOOTER_LINES);
-
-    int top_h = ideal_panel_h(fame_lines);
-    int bot_h = ideal_panel_h(lame_lines);
+    int base_top_h = ideal_panel_h(fame_lines);
+    int base_bot_h = ideal_panel_h(lame_lines);
     int latest_h = MIN_LATEST_H;
+    int base_chart_h = avail - base_top_h - base_bot_h - latest_h;
+    int surplus = base_chart_h - MIN_CHART_H;
+    int padding = (surplus >= 4) ? 2 : 0;
+    int top_h = base_top_h + padding;
+    int bot_h = base_bot_h + padding;
     int chart_h = avail - top_h - bot_h - latest_h;
 
     if (chart_h >= MIN_CHART_H) {
@@ -140,7 +149,6 @@ static int try_stacked(int rows, int cols, Layout *out) {
       y += chart_h;
       int latest_y = y;
       y += latest_h + FOOTER_LINES;
-
       if (y <= rows) {
         out->mode = LAYOUT_STACKED;
         out->banner_lines = banner_lines;
@@ -158,26 +166,28 @@ static int try_stacked(int rows, int cols, Layout *out) {
         return 1;
       }
     }
-
-    bool trimmed = 0;
+    bool trimmed = false;
     for (int k = 0; k < 3 && !trimmed; ++k) {
       int idx = (iter + k) % 3;
       if (*trim[idx] > 1) {
         --(*trim[idx]);
-        trimmed = 1;
+        trimmed = true;
       }
     }
-    if (!trimmed)
+    if (!trimmed) {
       break;
+    }
   }
   return 0;
 }
 
 static int compute_layout(int rows, int cols, Layout *out) {
-  if (cols < MIN_COLS || rows < MIN_ROWS)
+  if (cols < MIN_COLS || rows < MIN_ROWS) {
     return 0;
-  if (try_side_by_side(rows, cols, out))
+  }
+  if (try_side_by_side(rows, cols, out)) {
     return 1;
+  }
   return try_stacked(rows, cols, out);
 }
 
@@ -229,27 +239,32 @@ static int apply_layout(WINDOW **top, WINDOW **bot, WINDOW **chart,
                                 SIDE_MARGIN);
   *latest = resize_or_create_win(*latest, lo->latest_h, lo->win_w, lo->latest_y,
                                  SIDE_MARGIN);
-  if (*top && *bot && *chart && *latest)
+  if (*top && *bot && *chart && *latest) {
     return 1;
+  }
   delete_windows(top, bot, chart, latest);
   return 0;
 }
 
 static void draw_banner(int cols, int banner_lines) {
-  if (has_colors())
+  if (has_colors()) {
     wattron(stdscr, COLOR_PAIR(CP_BANNER) | A_BOLD);
+  }
   const char **lines = draw_banner_ptr();
   for (int i = 0; i < banner_lines; ++i) {
     int disp = utf8_display_width(lines[i]);
     int x = (cols - disp) / 2;
-    if (x < 0)
+    if (x < 0) {
       x = 0;
-    if (x + disp > cols)
+    }
+    if (x + disp > cols) {
       x = (cols > disp) ? cols - disp : 0;
+    }
     mvprintw(i, x, "%s", lines[i]);
   }
-  if (has_colors())
+  if (has_colors()) {
     wattroff(stdscr, COLOR_PAIR(CP_BANNER) | A_BOLD);
+  }
 }
 
 static void draw_top_window(WINDOW *win, int fame_lines) {
@@ -258,8 +273,9 @@ static void draw_top_window(WINDOW *win, int fame_lines) {
           ACS_URCORNER, ACS_LLCORNER, ACS_LRCORNER);
   int win_h = getmaxy(win);
   int max_fame = clamp_i(fame_lines, 0, win_h - 3);
-  if (max_fame > 0)
+  if (max_fame > 0) {
     draw_block_centered(win, draw_fame_ptr(), max_fame, 1, CP_TOP2);
+  }
   int rows_start = max_i(2, 1 + max_fame + 1);
   int capacity = clamp_i(win_h - rows_start - 1, 0, data_count());
   draw_rows_in_win_centered_safe(win, rows_start, capacity, 0);
@@ -271,30 +287,43 @@ static void draw_bot_window(WINDOW *win, int lame_lines) {
           ACS_URCORNER, ACS_LLCORNER, ACS_LRCORNER);
   int win_h = getmaxy(win);
   int max_lame = clamp_i(lame_lines, 0, win_h - 3);
-  if (max_lame > 0)
+  if (max_lame > 0) {
     draw_block_centered(win, draw_lame_ptr(), max_lame, 1, CP_LAME);
+  }
   int rows_start = max_i(2, 1 + max_lame + 1);
   int capacity = clamp_i(win_h - rows_start - 1, 0, data_count());
   draw_rows_in_win_centered_safe(win, rows_start, capacity, 1);
 }
 
-static void draw_latest_window(WINDOW *win) {
+static void draw_latest_window(WINDOW *win, int highlight) {
   werase(win);
-  wborder(win, ACS_VLINE, ACS_VLINE, ACS_HLINE, ACS_HLINE, ACS_ULCORNER,
-          ACS_URCORNER, ACS_LLCORNER, ACS_LRCORNER);
+
+  if (highlight && has_colors()) {
+    wattron(win, COLOR_PAIR(CP_BANNER) | A_BOLD);
+    wborder(win, ACS_VLINE, ACS_VLINE, ACS_HLINE, ACS_HLINE, ACS_ULCORNER,
+            ACS_URCORNER, ACS_LLCORNER, ACS_LRCORNER);
+    wattroff(win, COLOR_PAIR(CP_BANNER) | A_BOLD);
+  } else {
+    wborder(win, ACS_VLINE, ACS_VLINE, ACS_HLINE, ACS_HLINE, ACS_ULCORNER,
+            ACS_URCORNER, ACS_LLCORNER, ACS_LRCORNER);
+  }
 
   int win_w = getmaxx(win);
   int win_h = getmaxy(win);
 
-  static const char title[] = " LATEST PURCHASE ";
-  int title_x = (win_w - (int)(sizeof title - 1)) / 2;
-  if (title_x < 1)
+  const char *title = highlight ? " \xe2\x98\x85 NEW PURCHASE \xe2\x98\x85 "
+                                : " LATEST PURCHASE ";
+  int title_x = (win_w - utf8_display_width(title)) / 2;
+  if (title_x < 1) {
     title_x = 1;
-  if (has_colors())
+  }
+  if (has_colors()) {
     wattron(win, COLOR_PAIR(CP_BANNER) | A_BOLD);
+  }
   mvwprintw(win, 0, title_x, "%s", title);
-  if (has_colors())
+  if (has_colors()) {
     wattroff(win, COLOR_PAIR(CP_BANNER) | A_BOLD);
+  }
 
   PurchaseItem items[LATEST_ITEM_MAX];
   long ts = 0;
@@ -303,8 +332,9 @@ static void draw_latest_window(WINDOW *win) {
   if (n == 0) {
     static const char nd[] = "no data";
     int x = (win_w - (int)(sizeof nd - 1)) / 2;
-    if (x < 1)
+    if (x < 1) {
       x = 1;
+    }
     mvwprintw(win, (win_h - 1) / 2, x, "%s", nd);
     return;
   }
@@ -312,29 +342,42 @@ static void draw_latest_window(WINDOW *win) {
   char timebuf[32] = "";
   time_t t = (time_t)ts;
   struct tm *tp = localtime(&t);
-  if (tp)
-    strftime(timebuf, sizeof timebuf, "%a %d %b %Y  %H:%M:%S", tp);
+  static const char *wdays[] = {"Sun", "Mon", "Tue", "Wed",
+                                "Thu", "Fri", "Sat"};
+  static const char *mons[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+  if (tp) {
+    snprintf(timebuf, sizeof timebuf, "%s %02d %s %04d  %02d:%02d:%02d",
+             wdays[tp->tm_wday], tp->tm_mday, mons[tp->tm_mon],
+             tp->tm_year + 1900, tp->tm_hour, tp->tm_min, tp->tm_sec);
+  }
   int tx = (win_w - (int)strlen(timebuf)) / 2;
-  if (tx < 1)
+  if (tx < 1) {
     tx = 1;
-  if (has_colors())
+  }
+  if (has_colors()) {
     wattron(win, A_DIM);
+  }
   mvwprintw(win, 1, tx, "%s", timebuf);
-  if (has_colors())
+  if (has_colors()) {
     wattroff(win, A_DIM);
+  }
 
   int max_rows = win_h - 3;
-  if (max_rows < 1)
+  if (max_rows < 1) {
     return;
+  }
   int page_rows = (n > max_rows) ? max_rows - 1 : max_rows;
-  if (page_rows < 1)
+  if (page_rows < 1) {
     page_rows = 1;
+  }
   int n_pages = (n + page_rows - 1) / page_rows;
   int page = (n_pages > 1) ? (int)(time(NULL) / 3) % n_pages : 0;
   int start_idx = page * page_rows;
   int show = n - start_idx;
-  if (show > page_rows)
+  if (show > page_rows) {
     show = page_rows;
+  }
 
   for (int i = 0; i < show; ++i) {
     int idx = start_idx + i;
@@ -343,15 +386,19 @@ static void draw_latest_window(WINDOW *win) {
         snprintf(buf, sizeof buf, "%s \xe2\x80\x94 %d %s", items[idx].name,
                  items[idx].units, items[idx].units == 1 ? "unit" : "units");
     int x = (win_w - len) / 2;
-    if (x < 1)
+    if (x < 1) {
       x = 1;
-    if (x + len > win_w - 1)
+    }
+    if (x + len > win_w - 1) {
       buf[win_w - 1 - x] = '\0';
-    if (has_colors())
+    }
+    if (has_colors()) {
       wattron(win, COLOR_PAIR(CP_TOP2) | A_BOLD);
+    }
     mvwprintw(win, 2 + i, x, "%s", buf);
-    if (has_colors())
+    if (has_colors()) {
       wattroff(win, COLOR_PAIR(CP_TOP2) | A_BOLD);
+    }
   }
 
   if (n_pages > 1) {
@@ -359,17 +406,21 @@ static void draw_latest_window(WINDOW *win) {
     int ilen =
         snprintf(indicator, sizeof indicator, "%d / %d", page + 1, n_pages);
     int ix = (win_w - ilen) / 2;
-    if (ix < 1)
+    if (ix < 1) {
       ix = 1;
-    if (has_colors())
+    }
+    if (has_colors()) {
       wattron(win, A_DIM);
+    }
     mvwprintw(win, 2 + page_rows, ix, "%s", indicator);
-    if (has_colors())
+    if (has_colors()) {
       wattroff(win, A_DIM);
+    }
   }
 }
 
 static void draw_confetti_animation(int rows, int cols) {
+
   static const char *lines[] = {
       "█▀▀ █▀▀ █▀█ ▀█▀ ▀█▀ █▀▀ ▀█▀ █▀▀ █▀▄    █▀█ █▀█ █▀█ █ █ █▀█ █▀█▀█    █▀▀ "
       "█   █▀█ █▀▀ █▀▀ ▀█▀ █▀▀",
@@ -380,8 +431,9 @@ static void draw_confetti_animation(int rows, int cols) {
       NULL};
 
   int n_lines = 0;
-  while (lines[n_lines])
+  while (lines[n_lines]) {
     n_lines++;
+  }
 
   static const int colors[] = {CP_TOP1,   CP_TOP2,   CP_ALERT,  CP_ACCENT,
                                CP_BANNER, CP_LINE_1, CP_LINE_2, CP_LINE_3,
@@ -398,7 +450,7 @@ static void draw_confetti_animation(int rows, int cols) {
   for (int i = 0; i < MAX_CONFETTI; i++) {
     confetti[i].x = rand() % cols;
     confetti[i].y = -(rand() % rows);
-    confetti[i].speed = rand() % 3 + 1;
+    confetti[i].speed = (rand() % 3) + 1;
     confetti[i].dx = (rand() % 3) - 1;
     confetti[i].color = colors[rand() % n_colors];
     confetti[i].ch = pieces[rand() % (sizeof(pieces) - 1)];
@@ -414,27 +466,30 @@ static void draw_confetti_animation(int rows, int cols) {
       if (confetti[i].y >= 0 && confetti[i].y < rows && confetti[i].x >= 0 &&
           confetti[i].x < cols) {
 
-        if (has_colors())
+        if (has_colors()) {
           attron(COLOR_PAIR(confetti[i].color) | A_BOLD);
+        }
 
         mvaddch(confetti[i].y, confetti[i].x, confetti[i].ch);
 
-        if (has_colors())
+        if (has_colors()) {
           attroff(COLOR_PAIR(confetti[i].color) | A_BOLD);
+        }
       }
 
       confetti[i].y += confetti[i].speed;
       confetti[i].x += confetti[i].dx;
 
-      if (confetti[i].x < 0)
+      if (confetti[i].x < 0) {
         confetti[i].x = cols - 1;
-      else if (confetti[i].x >= cols)
+      } else if (confetti[i].x >= cols) {
         confetti[i].x = 0;
+      }
 
       if (confetti[i].y >= rows) {
         confetti[i].y = -(rand() % rows);
         confetti[i].x = rand() % cols;
-        confetti[i].speed = rand() % 3 + 1;
+        confetti[i].speed = (rand() % 3) + 1;
         confetti[i].dx = (rand() % 3) - 1;
         confetti[i].color = colors[rand() % n_colors];
         confetti[i].ch = pieces[rand() % (sizeof(pieces) - 1)];
@@ -444,21 +499,25 @@ static void draw_confetti_animation(int rows, int cols) {
     for (int i = 0; i < n_lines; i++) {
       int y = frame - (n_lines - 1 - i) - 2;
 
-      if (y < 0 || y >= rows)
+      if (y < 0 || y >= rows) {
         continue;
+      }
 
       int len = utf8_display_width(lines[i]);
       int x = (cols - len) / 2;
-      if (x < 0)
+      if (x < 0) {
         x = 0;
+      }
 
-      if (has_colors())
+      if (has_colors()) {
         attron(COLOR_PAIR(CP_BANNER) | A_BOLD);
+      }
 
       mvprintw(y, x, "%s", lines[i]);
 
-      if (has_colors())
+      if (has_colors()) {
         attroff(COLOR_PAIR(CP_BANNER) | A_BOLD);
+      }
     }
 
     refresh();
@@ -468,6 +527,7 @@ static void draw_confetti_animation(int rows, int cols) {
   napms(300);
   clearok(curscr, TRUE);
 }
+
 void ui_init(void) {
   struct sigaction sa;
   memset(&sa, 0, sizeof sa);
@@ -479,7 +539,8 @@ void ui_init(void) {
 }
 
 void ui_run(void) {
-  int rows, cols;
+  int rows;
+  int cols;
   getmaxyx(stdscr, rows, cols);
 
   Layout lo = {
@@ -488,16 +549,23 @@ void ui_run(void) {
       .lame_lines = draw_lame_lines(),
   };
 
-  WINDOW *top = NULL, *bot = NULL, *chart = NULL, *latest = NULL;
+  WINDOW *top = NULL;
+  WINDOW *bot = NULL;
+  WINDOW *chart = NULL;
+  WINDOW *latest = NULL;
   int have_win = 0;
+
   long last_purchase_ts = 0;
+  time_t highlight_until = 0;
+
   {
     PurchaseItem tmp[1];
     data_latest_purchase(&last_purchase_ts, tmp, 1);
   }
 
-  if (compute_layout(rows, cols, &lo))
+  if (compute_layout(rows, cols, &lo)) {
     have_win = apply_layout(&top, &bot, &chart, &latest, &lo);
+  }
 
   int slide = 0;
   int n_slides = draw_chart_n_slides();
@@ -518,21 +586,24 @@ void ui_run(void) {
       data_reload();
       data_sort_by_qty_desc();
       n_slides = draw_chart_n_slides();
-      if (slide >= n_slides)
+      if (slide >= n_slides) {
         slide = 0;
+      }
       last_reload = now;
     }
-    PurchaseItem tmp[1];
-    long new_ts = 0;
-    data_latest_purchase(&new_ts, tmp, 1);
 
-    if (new_ts > last_purchase_ts && last_purchase_ts > 0) {
-      int purchase_count = data_purchase_count();
-      if (purchase_count > 0 && purchase_count % 100 == 0)
-        draw_confetti_animation(rows, cols);
+    {
+      PurchaseItem tmp[1];
+      long new_ts = 0;
+      data_latest_purchase(&new_ts, tmp, 1);
+      if (new_ts > last_purchase_ts && last_purchase_ts > 0) {
+        highlight_until = now + PURCHASE_HIGHLIGHT_SECS;
+        if (data_purchase_count() % 100 == 0) {
+          draw_confetti_animation(rows, cols);
+        }
+      }
+      last_purchase_ts = new_ts;
     }
-
-    last_purchase_ts = new_ts;
 
     if (resized) {
       resized = 0;
@@ -540,9 +611,11 @@ void ui_run(void) {
       lo.banner_lines = draw_banner_lines();
       lo.fame_lines = draw_fame_lines();
       lo.lame_lines = draw_lame_lines();
-      if (compute_layout(rows, cols, &lo))
-        have_win = apply_layout(&top, &bot, &chart, &latest, &lo);
-      else {
+      if (compute_layout(rows, cols, &lo)) {
+        {
+          have_win = apply_layout(&top, &bot, &chart, &latest, &lo);
+        }
+      } else {
         delete_windows(&top, &bot, &chart, &latest);
         have_win = 0;
       }
@@ -550,38 +623,38 @@ void ui_run(void) {
       clearok(curscr, TRUE);
     }
 
+    int highlight = (now < highlight_until) ? 1 : 0;
     int remaining = SLIDE_SECONDS - (int)(now - slide_start);
-    werase(stdscr);
-    draw_banner(cols, lo.banner_lines);
 
     char timebuf[16];
-    time_t now_t = (time_t)now;
-    struct tm *tp = localtime(&now_t);
-    if (tp)
+    struct tm *tp = localtime(&now);
+    if (tp) {
       strftime(timebuf, sizeof timebuf, "%H:%M:%S", tp);
-    else
+    } else {
       snprintf(timebuf, sizeof timebuf, "--:--:--");
+    }
 
     char syncbuf[24] = "Sync: ?";
     {
-      char hbpath[512];
-      snprintf(hbpath, sizeof hbpath, "sync.heartbeat");
-      FILE *hb = fopen(hbpath, "r");
+      FILE *hb = fopen("src/backend/sync.heartbeat", "r");
       if (hb) {
         long hbts = 0;
         if (fscanf(hb, "%ld", &hbts) == 1) {
           int age = (int)(now - (time_t)hbts);
-          if (age < 5)
+          if (age < 5) {
             snprintf(syncbuf, sizeof syncbuf, "Sync: OK");
-          else if (age < 60)
+          } else if (age < 60) {
             snprintf(syncbuf, sizeof syncbuf, "Sync: %ds ago", age);
-          else
+          } else {
             snprintf(syncbuf, sizeof syncbuf, "Sync: STALE");
+          }
         }
         fclose(hb);
       }
     }
 
+    werase(stdscr);
+    draw_banner(cols, lo.banner_lines);
     printw_centered_stdscr_safe(
         rows - FOOTER_LINES, cols,
         "Slide %d/%d | Next in %ds | Tab: advance | q: quit | %s | %s",
@@ -591,7 +664,7 @@ void ui_run(void) {
       draw_top_window(top, lo.fame_lines);
       draw_bot_window(bot, lo.lame_lines);
       draw_chart_window(chart, slide, n_slides);
-      draw_latest_window(latest);
+      draw_latest_window(latest, highlight);
       wnoutrefresh(stdscr);
       wnoutrefresh(top);
       wnoutrefresh(bot);
@@ -605,8 +678,9 @@ void ui_run(void) {
     doupdate();
 
     int ch = getch();
-    if (ch == 'q' || ch == 'Q')
+    if (ch == 'q' || ch == 'Q') {
       break;
+    }
     if (ch == '\t' || ch == KEY_RIGHT) {
       slide = (slide + 1) % n_slides;
       slide_start = time(NULL);
