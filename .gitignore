@@ -4,6 +4,7 @@ tokens.json
 sync_state.json
 leaderboard.log
 sync.heartbeat
+compile_commands.json
 
 src/backend/example.db
 src/backend/create

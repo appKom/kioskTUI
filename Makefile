@@ -7,7 +7,7 @@ DB_LIBS  := -lsqlite3
 INCLUDES := -I./src/include -I./include/
 
 # Build modes
-CFLAGS  := -Wall -O2 $(INCLUDES)
+CFLAGS := -Wall -O2 -D_XOPEN_SOURCE=700 $(INCLUDES)
 DEBUG_CFLAGS := -g -O0
 RELEASE_CFLAGS := -O2
 

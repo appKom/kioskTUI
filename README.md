@@ -42,7 +42,7 @@ make && ./leaderboard
 
 ## Automation
 
-For it to run persistently on a machine, a systemd service file for leaderboard and sync (TODO) has been added. Since it uses systemd specific configurations, if the linux distribution uses another init system, it won't work out of the box. An equivalent service definition would have to be created for these systems.
+For it to run persistently on a machine, a systemd service file for leaderboard and sync has been added. Since it uses systemd specific configurations, if the linux distribution uses another init system, it won't work out of the box. An equivalent service definition would have to be created for these systems.
 Before enabling the service, change the values in both service files to:
 
 User= to the user account that should run the application.
