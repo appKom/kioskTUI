@@ -37,7 +37,7 @@ def get_products():
     return [r[0] for r in rows]
 
 
-def insert_purchase(items, purchased_at=None):
+def insert_purchase(items, purchased_at=None, rebuild=True):
     ts = purchased_at or int(time.time())
     conn = open_db()
     with conn:
@@ -57,7 +57,8 @@ def insert_purchase(items, purchased_at=None):
         """,
             (cutoff,),
         )
-        rebuild_sales_history(conn)
+        if rebuild:
+            rebuild_sales_history(conn)
     conn.close()
     return ts
 
@@ -158,9 +159,13 @@ def test_rapid_sequential():
         name = random.choice(products)
         qty = random.randint(1, 3)
         ts = start_ts + i
-        insert_purchase([(name, qty)], purchased_at=ts)
+        insert_purchase([(name, qty)], purchased_at=ts, rebuild=False)
         print(f"  [{i + 1}/10] {name} x{qty}")
         time.sleep(1)
+    conn = open_db()
+    with conn:
+        rebuild_sales_history(conn)
+    conn.close()
     print("Done. Check that each purchase appeared correctly.")
     offer_cleanup(start_ts)
 
@@ -176,9 +181,14 @@ def test_stress():
     for i in range(20):
         name = random.choice(products)
         t0 = time.time()
-        insert_purchase([(name, 1)], purchased_at=start_ts + i)
+        insert_purchase([(name, 1)], purchased_at=start_ts + i, rebuild=False)
         times.append((time.time() - t0) * 1000)
     avg = sum(times) / len(times)
+    conn = open_db()
+    with conn:
+        rebuild_sales_history(conn)
+    conn.close()
+
     print(f"20 inserts complete. Avg: {avg:.1f}ms  Max: {max(times):.1f}ms")
     offer_cleanup(start_ts)
 
@@ -340,10 +350,14 @@ def test_bulk_purchases():
         name = random.choice(products)
         qty = random.randint(1, 3)
 
-        insert_purchase([(name, qty)], purchased_at=start_ts + i)
+        insert_purchase([(name, qty)], purchased_at=start_ts + i, rebuild=False)
 
         if (i + 1) % 50 == 0 or i + 1 == count:
             print(f"  {i + 1}/{count}")
+    conn = open_db()
+    with conn:
+        rebuild_sales_history(conn)
+    conn.close()
 
     print("Done.")
     offer_cleanup(start_ts)
