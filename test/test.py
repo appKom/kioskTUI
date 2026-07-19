@@ -25,7 +25,7 @@ DB_PATH = os.path.join(PROJECT_ROOT, "src/backend/example.db")
 
 
 def open_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -351,21 +351,32 @@ def test_bulk_purchases():
 
 def get_db_data():
     conn = open_db()
+
     count = conn.execute(
         "SELECT COUNT(DISTINCT purchased_at) FROM PURCHASES"
     ).fetchone()[0]
-    latest = conn.execute(
-        "SELECT purchased_at, name, units FROM PURCHASES WHERE purchased_at = (SELECT MAX(purchased_at) FROM PURCHASES) ORDER BY units DESC"
-    ).fetchone()
     distinct_products = conn.execute(
         "SELECT COUNT(DISTINCT name) FROM PURCHASES"
     ).fetchone()[0]
+    purchases_rows = conn.execute("SELECT COUNT(*) FROM PURCHASES").fetchone()[0]
+    latest_purchase = conn.execute(
+        "SELECT purchased_at, name, units FROM PURCHASES WHERE purchased_at = (SELECT MAX(purchased_at) FROM PURCHASES) ORDER BY units DESC"
+    ).fetchone()
+    latest_sales_history = conn.execute(
+        "SELECT snapshot_time, name, amount FROM SALES_HISTORY WHERE snapshot_time = (SELECT MAX(snapshot_time) FROM SALES_HISTORY)"
+    ).fetchone()
+    last_week_purchases = conn.execute(
+        "SELECT COUNT(*) FROM PURCHASES WHERE purchased_at >= strftime('%s', 'now', '-7 days')"
+    ).fetchone()[0]
+
     conn.close()
     print()
     print(f"Total purchase count \n{count}\n")
     print(f"Distinct products \n{distinct_products}\n")
-    print(f"Latest purchase \n {tuple(latest)}\n")
-
+    print(f"Row count in purchases table \n{purchases_rows}\n")
+    print(f"Latest purchase \n{tuple(latest_purchase)}\n")
+    print(f"Latest sales history entry \n{tuple(latest_sales_history)}\n")
+    print(f"Total purchases last 7 days \n{last_week_purchases}\n")
     print()
 
 
