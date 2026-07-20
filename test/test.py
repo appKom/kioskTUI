@@ -37,8 +37,9 @@ def get_products():
     return [r[0] for r in rows]
 
 
-def insert_purchase(items, purchased_at=None, rebuild=True):
+def insert_purchase(items, purchased_at=None):
     ts = purchased_at or int(time.time())
+    slot = ts - (ts % 3600)
     conn = open_db()
     with conn:
         conn.executemany(
@@ -57,34 +58,35 @@ def insert_purchase(items, purchased_at=None, rebuild=True):
         """,
             (cutoff,),
         )
-        if rebuild:
-            rebuild_sales_history(conn)
+        for name, units in items:
+            prev = conn.execute(
+                "SELECT amount FROM SALES_HISTORY WHERE name = ? "
+                "AND snapshot_time <= ? ORDER BY snapshot_time DESC LIMIT 1;",
+                (name, slot),
+            ).fetchone()
+            existing = conn.execute(
+                "SELECT amount FROM SALES_HISTORY WHERE name = ? AND snapshot_time = ?;",
+                (name, slot),
+            ).fetchone()
+            base = prev[0] if prev else 0
+            new_amount = (existing[0] if existing else base) + units
+            conn.execute(
+                "INSERT OR REPLACE INTO SALES_HISTORY(snapshot_time, name, amount) "
+                "VALUES (?, ?, ?);",
+                (slot, name, new_amount),
+            )
     conn.close()
     return ts
 
 
-def rebuild_sales_history(conn):
-    rows = conn.execute(
-        "SELECT purchased_at, name, units FROM PURCHASES ORDER BY purchased_at ASC"
-    ).fetchall()
-    cumulative = {}
-    hourly = {}
-    for row in rows:
-        ts, name, units = row[0], row[1], row[2]
-        slot = ts - (ts % 3600)
-        cumulative[name] = cumulative.get(name, 0) + units
-        hourly[(slot, name)] = cumulative[name]
-    conn.execute("DELETE FROM SALES_HISTORY;")
-    conn.executemany(
-        "INSERT OR REPLACE INTO SALES_HISTORY(snapshot_time, name, amount) VALUES (?, ?, ?);",
-        [(slot, name, amount) for (slot, name), amount in sorted(hourly.items())],
-    )
-
-
 def clear_test_purchases(since_ts):
+    slot_start = since_ts - (since_ts % 3600)
     conn = open_db()
     with conn:
         conn.execute("DELETE FROM PURCHASES WHERE purchased_at >= ?;", (since_ts,))
+        conn.execute(
+            "DELETE FROM SALES_HISTORY WHERE snapshot_time >= ?;", (slot_start,)
+        )
         cutoff = int(time.time()) - 365 * 86400
         conn.execute(
             """
@@ -97,7 +99,6 @@ def clear_test_purchases(since_ts):
         """,
             (cutoff,),
         )
-        rebuild_sales_history(conn)
     conn.close()
 
 
@@ -159,13 +160,9 @@ def test_rapid_sequential():
         name = random.choice(products)
         qty = random.randint(1, 3)
         ts = start_ts + i
-        insert_purchase([(name, qty)], purchased_at=ts, rebuild=False)
+        insert_purchase([(name, qty)], purchased_at=ts)
         print(f"  [{i + 1}/10] {name} x{qty}")
         time.sleep(1)
-    conn = open_db()
-    with conn:
-        rebuild_sales_history(conn)
-    conn.close()
     print("Done. Check that each purchase appeared correctly.")
     offer_cleanup(start_ts)
 
@@ -181,13 +178,9 @@ def test_stress():
     for i in range(20):
         name = random.choice(products)
         t0 = time.time()
-        insert_purchase([(name, 1)], purchased_at=start_ts + i, rebuild=False)
+        insert_purchase([(name, 1)], purchased_at=start_ts + i)
         times.append((time.time() - t0) * 1000)
     avg = sum(times) / len(times)
-    conn = open_db()
-    with conn:
-        rebuild_sales_history(conn)
-    conn.close()
 
     print(f"20 inserts complete. Avg: {avg:.1f}ms  Max: {max(times):.1f}ms")
     offer_cleanup(start_ts)
@@ -350,14 +343,10 @@ def test_bulk_purchases():
         name = random.choice(products)
         qty = random.randint(1, 3)
 
-        insert_purchase([(name, qty)], purchased_at=start_ts + i, rebuild=False)
+        insert_purchase([(name, qty)], purchased_at=start_ts + i)
 
         if (i + 1) % 50 == 0 or i + 1 == count:
             print(f"  {i + 1}/{count}")
-    conn = open_db()
-    with conn:
-        rebuild_sales_history(conn)
-    conn.close()
 
     print("Done.")
     offer_cleanup(start_ts)
