@@ -115,7 +115,7 @@ sync:
 tidy:
 	find $(SRCDIR) -name '*.c' -print0 | xargs -0 clang-tidy -p .
 
-.PHONY: tidy-tix
+.PHONY: tidy-fix
 tidy-tix:
 	find $(SRCDIR) -name '*.c' -print0 | xargs -0 clang-tidy -p . -fix
 
