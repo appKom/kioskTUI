@@ -12,6 +12,11 @@ To use the TUI, you should have installed and assured that the following are wor
 4. Sqllite
 5. python
 
+For development, the following two should be installed and working:
+
+1. clang
+2. bear
+
 The software has not been tested on windows, as the windows terminal emulator infrastructure has really bad graphical protocols/compatibility.
 MacOS should work (UNIX based, iTERM's graphical protocol etc).
 It has also been tested on server configurations with no DE or compositor, and everything runs properly, though the graphical borders get converted to true ascii characters instead.
@@ -80,3 +85,32 @@ make test
 ```
 
 The tests written emulate Zettle transactions and are meant to test response time of the tui as well as edge cases (such as how it responds to max items in a transaction). All the injected test data can be removed after observation with a prompt after test finish.
+
+Note: some of the larger bulk purchases seem to occupy the database long enough for it to be a significant delay after insertion and the ability to insert more values. A large bulk purchase before a single, small one is as of yet terribly inefficient.
+
+## Development
+
+Clang tools have been used for development and added to the Makefile and repo. This can be ignore for basic use of the tui, but deserve to be mentioned in the docs. The Clang-tidy (not LSP) tool is used in the Makefile to run both a regular checkup of the code, checkup with available, automatic fixes and also formatting the code consistently should this be wished.
+
+These are used running the following commands.
+
+Checkup with no fix:
+
+```bash
+make tidy
+```
+
+Checkup with fixes:
+
+```bash
+make tidy-fix
+```
+
+Formating the code:
+
+```bash
+make format
+```
+
+The Clang dependency is not used for other purposes, meaning a machine that doesn't have this or the Bear compilation db generator will be fine for general use, as again this only touches the development workflow.
+Bear is needed to regenerate the compile_commands.json for use with clang-tidy.
