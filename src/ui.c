@@ -430,6 +430,30 @@ static void draw_confetti_animation(int rows, int cols) {
       "▀▀▀ ▀ ▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀▀▀",
       NULL};
 
+  static const char *smaller_lines[] = {
+      "█▀▀ █▀▀ █▀█ ▀█▀ ▀█▀ █▀▀ ▀█▀ █▀▀ █▀▄      █▀█ █▀█ █▀█ █ █ █▀█ █▀█▀█",
+      "▓░  ▓▀  ▓▀▄  ▓░  ▓░ ▓▀   ▓░ ▓▀  █ ▓      █▀▓ ▓▀  ▓▀  ▓▀▄ █ ▓ █   ▓",
+      "▀▀▀ ▀▀▀ ▀ ▀  ▀  ▀▀▀ ▀   ▀▀▀ ▀▀▀ ▀▀       ▀ ▀ ▀   ▀   ▀ ▀ ▀▀▀ ▀   ▀",
+      "",
+      "                █▀▀ █   █▀█ █▀▀ █▀▀ ▀█▀ █▀▀",
+      "                ▓░  ▓░  █▀▓ ▀▀▓ ▀▀▓  ▓░ ▓░",
+      "                ▀▀▀ ▀▀▀ ▀ ▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀▀▀",
+      NULL};
+
+  static const char *smallest_lines[] = {
+      [0] = "█▀▀ █▀▀ █▀█ ▀█▀ ▀█▀ █▀▀ ▀█▀ █▀▀ █▀▄",
+      [1] = "▓░  ▓▀  ▓▀▄  ▓░  ▓░ ▓▀   ▓░ ▓▀  █ ▓",
+      [2] = "▀▀▀ ▀▀▀ ▀ ▀  ▀  ▀▀▀ ▀   ▀▀▀ ▀▀▀ ▀▀ ",
+      [3] = "",
+      [4] = "█▀█ █▀█ █▀█ █ █ █▀█ █▀█▀█",
+      [5] = "█▀▓ ▓▀  ▓▀  ▓▀▄ █ ▓ █   ▓",
+      [6] = "▀ ▀ ▀   ▀   ▀ ▀ ▀▀▀ ▀   ▀",
+      [7] = "",
+      [8] = "█▀▀ █   █▀█ █▀▀ █▀▀ ▀█▀ █▀▀",
+      [9] = "▓░  ▓░  █▀▓ ▀▀▓ ▀▀▓  ▓░ ▓░ ",
+      [10] = "▀▀▀ ▀▀▀ ▀ ▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀▀▀",
+      [11] = NULL};
+
   int n_lines = 0;
   while (lines[n_lines]) {
     n_lines++;
@@ -495,29 +519,28 @@ static void draw_confetti_animation(int rows, int cols) {
         confetti[i].ch = pieces[rand() % (sizeof(pieces) - 1)];
       }
     }
-
     for (int i = 0; i < n_lines; i++) {
       int y = frame - (n_lines - 1 - i) - 2;
-
-      if (y < 0 || y >= rows) {
+      if (y < 0 || y >= rows)
         continue;
-      }
-
       int len = utf8_display_width(lines[i]);
-      int x = (cols - len) / 2;
-      if (x < 0) {
-        x = 0;
-      }
-
-      if (has_colors()) {
+      if (has_colors())
         attron(COLOR_PAIR(CP_BANNER) | A_BOLD);
+      if (len <= cols) {
+        int x = (cols - len) / 2;
+        if (x < 0)
+          x = 0;
+        mvprintw(y, x, "%s", lines[i]);
+      } else {
+        char truncated[1024];
+        utf8_truncate_to_width(lines[i], truncated, sizeof truncated, cols);
+        mvprintw(y, 0, "%s", truncated);
       }
-
-      mvprintw(y, x, "%s", lines[i]);
-
-      if (has_colors()) {
+      if (has_colors())
         attroff(COLOR_PAIR(CP_BANNER) | A_BOLD);
-      }
+
+      fprintf(stderr, "line0 display width: %d, cols: %d\n",
+              utf8_display_width(lines[0]), cols);
     }
 
     refresh();
