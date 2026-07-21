@@ -111,6 +111,19 @@ test:
 sync:
 	python3 src/scripts/sync.py
 
+.PHONY: tidy
+tidy:
+	find $(SRCDIR) -name '*.c' -print0 | xargs -0 clang-tidy -p .
+
+.PHONY: tidy-tix
+tidy-tix:
+	find $(SRCDIR) -name '*.c' -print0 | xargs -0 clang-tidy -p . -fix
+
+.PHONY: format
+format:
+	find $(SRCDIR) -name '*.c' -exec clang-format -i {} +
+
+
 # ── Include auto-generated dependency files ────────────────────────────
 -include $(DEPS)
 
