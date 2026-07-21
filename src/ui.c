@@ -421,7 +421,7 @@ static void draw_latest_window(WINDOW *win, int highlight) {
 
 static void draw_confetti_animation(int rows, int cols) {
 
-  static const char *lines[] = {
+  static const char *largest_lines[] = {
       "█▀▀ █▀▀ █▀█ ▀█▀ ▀█▀ █▀▀ ▀█▀ █▀▀ █▀▄    █▀█ █▀█ █▀█ █ █ █▀█ █▀█▀█    █▀▀ "
       "█   █▀█ █▀▀ █▀▀ ▀█▀ █▀▀",
       "▓░  ▓▀  ▓▀▄  ▓░  ▓░ ▓▀   ▓░ ▓▀  █ ▓    █▀▓ ▓▀  ▓▀  ▓▀▄ █ ▓ █   ▓    ▓░  "
@@ -435,9 +435,9 @@ static void draw_confetti_animation(int rows, int cols) {
       "▓░  ▓▀  ▓▀▄  ▓░  ▓░ ▓▀   ▓░ ▓▀  █ ▓      █▀▓ ▓▀  ▓▀  ▓▀▄ █ ▓ █   ▓",
       "▀▀▀ ▀▀▀ ▀ ▀  ▀  ▀▀▀ ▀   ▀▀▀ ▀▀▀ ▀▀       ▀ ▀ ▀   ▀   ▀ ▀ ▀▀▀ ▀   ▀",
       "",
-      "                █▀▀ █   █▀█ █▀▀ █▀▀ ▀█▀ █▀▀",
-      "                ▓░  ▓░  █▀▓ ▀▀▓ ▀▀▓  ▓░ ▓░",
-      "                ▀▀▀ ▀▀▀ ▀ ▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀▀▀",
+      "                  █▀▀ █   █▀█ █▀▀ █▀▀ ▀█▀ █▀▀                     ",
+      "                  ▓░  ▓░  █▀▓ ▀▀▓ ▀▀▓  ▓░ ▓░                      ",
+      "                  ▀▀▀ ▀▀▀ ▀ ▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀▀▀                     ",
       NULL};
 
   static const char *smallest_lines[] = {
@@ -453,6 +453,16 @@ static void draw_confetti_animation(int rows, int cols) {
       [9] = "▓░  ▓░  █▀▓ ▀▀▓ ▀▀▓  ▓░ ▓░ ",
       [10] = "▀▀▀ ▀▀▀ ▀ ▀ ▀▀▀ ▀▀▀ ▀▀▀ ▀▀▀",
       [11] = NULL};
+
+  const char **lines;
+
+  if (cols >= utf8_display_width(largest_lines[0])) {
+    lines = largest_lines;
+  } else if (cols >= utf8_display_width(smaller_lines[0])) {
+    lines = smaller_lines;
+  } else {
+    lines = smallest_lines;
+  }
 
   int n_lines = 0;
   while (lines[n_lines]) {
@@ -524,23 +534,19 @@ static void draw_confetti_animation(int rows, int cols) {
       if (y < 0 || y >= rows)
         continue;
       int len = utf8_display_width(lines[i]);
-      if (has_colors())
-        attron(COLOR_PAIR(CP_BANNER) | A_BOLD);
-      if (len <= cols) {
-        int x = (cols - len) / 2;
-        if (x < 0)
-          x = 0;
-        mvprintw(y, x, "%s", lines[i]);
-      } else {
-        char truncated[1024];
-        utf8_truncate_to_width(lines[i], truncated, sizeof truncated, cols);
-        mvprintw(y, 0, "%s", truncated);
+      int x = (cols - len) / 2;
+      if (x < 0) {
+        x = 0;
       }
-      if (has_colors())
-        attroff(COLOR_PAIR(CP_BANNER) | A_BOLD);
 
-      fprintf(stderr, "line0 display width: %d, cols: %d\n",
-              utf8_display_width(lines[0]), cols);
+      if (has_colors()) {
+        attron(COLOR_PAIR(CP_BANNER) | A_BOLD);
+      }
+      mvprintw(y, x, "%s", lines[i]);
+
+      if (has_colors()) {
+        attroff(COLOR_PAIR(CP_BANNER) | A_BOLD);
+      }
     }
 
     refresh();
